@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "author": "Equipe A2 — IPE I — IME 2026.1",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 180,
+      "left": 220,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-stepper-motor",
+      "id": "motor",
+      "top": 20,
+      "left": 0,
+      "attrs": {
+        "display": "steps",
+        "arrow": "CCW"
+      }
+    },
+    {
+      "type": "wokwi-servo",
+      "id": "servo",
+      "top": 20,
+      "left": 500,
+      "attrs": {
+        "horn": "single"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_status",
+      "top": 80,
+      "left": 480,
+      "attrs": {
+        "color": "yellow",
+        "label": "STATUS"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r_led",
+      "top": 110,
+      "left": 450,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot_bat",
+      "top": 380,
+      "left": 480,
+      "attrs": {
+        "label": "Bateria (GPIO34)"
+      }
+    }
+  ],
+  "connections": [
+    ["esp:TX0", "$serialMonitor:RX", "", []],
+    ["esp:RX0", "$serialMonitor:TX", "", []],
+    ["esp:D26",  "motor:A-",  "green",  []],
+    ["esp:D27",  "motor:A+",  "green",  []],
+    ["esp:D14",  "motor:B-",  "green",  []],
+    ["esp:D12",  "motor:B+",  "green",  []],
+    ["esp:D13",  "servo:PWM",   "purple", []],
+    ["esp:5V",   "servo:V+",    "red",    []],
+    ["esp:GND",  "servo:GND",   "black",  []],
+    ["esp:D2",   "r_led:1",     "yellow", []],
+    ["r_led:2",  "led_status:A","yellow", []],
+    ["led_status:K", "esp:GND", "black",  []],
+    ["pot_bat:SIG", "esp:D34",  "blue",   []],
+    ["pot_bat:VCC",  "esp:3V3", "red",    []],
+    ["pot_bat:GND",  "esp:GND", "black",  []]
+  ],
+  "serialMonitor": {
+    "display": "terminal",
+    "newline": "lf",
+    "convertEol": true
+  }
+}

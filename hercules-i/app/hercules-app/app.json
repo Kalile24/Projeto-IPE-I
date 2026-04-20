@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Hércules I",
+    "slug": "hercules-i",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0d0d0d"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.mil.ime.a2.herculesi",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "O app Hércules I utiliza Bluetooth para controlar a catapulta via ESP32.",
+        "NSBluetoothPeripheralUsageDescription": "O app Hércules I utiliza Bluetooth para controlar a catapulta via ESP32.",
+        "NSLocationWhenInUseUsageDescription": "Localização necessária para scan Bluetooth Low Energy."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0d0d0d"
+      },
+      "package": "br.mil.ime.a2.herculesi",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["peripheral"],
+          "bluetoothAlwaysPermission": "O app Hércules I utiliza Bluetooth para controlar a catapulta."
+        }
+      ]
+    ]
+  }
+}

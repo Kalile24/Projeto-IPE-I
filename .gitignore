@@ -1,0 +1,31 @@
+.codex
+.codex/
+
+# Arduino CLI local state and caches
+hercules-i/.arduino15/
+hercules-i/.arduino-cache/
+hercules-i/.build/
+hercules-i/.tools/
+hercules-i/Arduino/libraries/
+hercules-i/wokwi/.arduino15/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+build/
+!hercules-i/wokwi/build/
+!hercules-i/wokwi/build/sketch.ino.bin
+!hercules-i/wokwi/build/sketch.ino.elf
+!hercules-i/wokwi/build/sketch.ino.bootloader.bin
+!hercules-i/wokwi/build/sketch.ino.partitions.bin
+!hercules-i/wokwi/build/sketch.ino.merged.bin
+hercules-i/wokwi/build/*.map
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
