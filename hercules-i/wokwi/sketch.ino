@@ -26,9 +26,9 @@
  * === PINAGEM — idêntica ao firmware real =====================================
  *  GPIO 26  → A4988 STEP
  *  GPIO 27  → A4988 DIR
- *  GPIO 14  → A4988 ENABLE (ativo em LOW)
+ *  GPIO 14  → A4988 ENABLE (ativo em MOTOR_ENABLE_ACTIVE_LEVEL)
  *  GPIO 13  → Servo SG90 (PWM, via R3 220Ω)
- *  GPIO 25  → Botão endstop (NC simulado — LOW = home acionado)
+ *  GPIO 25  → Botão endstop (ativo em ENDSTOP_ACTIVE_LEVEL)
  *  GPIO 34  → Potenciômetro (simula saída do divisor R1/R2 da bateria)
  *  GPIO  2  → LED de status
  * =============================================================================
@@ -45,6 +45,14 @@
 #define PIN_ENDSTOP  25
 #define PIN_ADC      34
 #define PIN_LED       2
+
+// Níveis lógicos configuráveis.
+// Endstop COM+NO para GND: ativo em LOW (padrão atual).
+// Endstop COM+NC para GND: ativo em HIGH; troque ENDSTOP_ACTIVE_LEVEL para HIGH.
+#define MOTOR_ENABLE_ACTIVE_LEVEL   LOW
+#define MOTOR_ENABLE_INACTIVE_LEVEL HIGH
+#define ENDSTOP_ACTIVE_LEVEL        LOW
+#define ENDSTOP_INACTIVE_LEVEL      HIGH
 
 // ─── Configurações do motor ───────────────────────────────────────────────
 #define MOTOR_MAX_SPEED    500.0f
@@ -100,8 +108,12 @@ String       bufferSerial = "";
 
 // ─── Funções auxiliares ───────────────────────────────────────────────────
 
-void habilitarMotor()   { digitalWrite(PIN_ENABLE, LOW);  }
-void desabilitarMotor() { digitalWrite(PIN_ENABLE, HIGH); }
+void habilitarMotor()   { digitalWrite(PIN_ENABLE, MOTOR_ENABLE_ACTIVE_LEVEL);   }
+void desabilitarMotor() { digitalWrite(PIN_ENABLE, MOTOR_ENABLE_INACTIVE_LEVEL); }
+
+bool endstopAcionado() {
+    return digitalRead(PIN_ENDSTOP) == ENDSTOP_ACTIVE_LEVEL;
+}
 
 int distanciaParaIndice(float dist) {
     if (dist < DIST_MIN_M || dist > 4.00f) return -1;
@@ -156,7 +168,7 @@ void executarHoming() {
     printEstado();
     Serial.println("[HOMING] Recuando — pressione o botão ENDSTOP (verde) no diagrama.");
 
-    if (digitalRead(PIN_ENDSTOP) == LOW) {
+    if (endstopAcionado()) {
         motor.setCurrentPosition(0);
         desabilitarMotor();
         estadoAtual = IDLE;
@@ -169,7 +181,7 @@ void executarHoming() {
     motor.setMaxSpeed(HOMING_SPEED);
     motor.move(-HOMING_MAX_STEPS);
 
-    while (digitalRead(PIN_ENDSTOP) == HIGH && motor.distanceToGo() != 0) {
+    while (!endstopAcionado() && motor.distanceToGo() != 0) {
         motor.run();
         atualizarLED();
     }
@@ -180,7 +192,7 @@ void executarHoming() {
     desabilitarMotor();
     estadoAtual = IDLE;
 
-    if (digitalRead(PIN_ENDSTOP) == LOW) {
+    if (endstopAcionado()) {
         Serial.println("[HOMING] Posição zero estabelecida com sucesso.");
     } else {
         Serial.println("[HOMING] AVISO: limite atingido sem detectar endstop. Verifique o botão.");

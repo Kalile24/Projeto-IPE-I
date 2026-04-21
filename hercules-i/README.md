@@ -17,7 +17,7 @@ O sistema permite selecionar a distância de lançamento (0,5 m a 4,0 m) pelo ce
 | Aspecto | Status |
 |---------|--------|
 | **Firmware** | v1.1.0 — Non-blocking FSM, homing, mutex FreeRTOS |
-| **Hardware** | ESP32 + A4988 + NEMA 17 + SG90 + Endstop NC + Bateria 9V |
+| **Hardware** | ESP32 + A4988 + NEMA 17 + SG90 + fim de curso + bateria 9V |
 | **Simulação** | Wokwi — A4988 + AccelStepper (idêntico ao real) |
 | **Alcance** | 0,5 m a 4,0 m (via lookup table calibrável) |
 | **Controle** | BLE (app mobile) ou Serial Monitor (testes) |
@@ -31,8 +31,10 @@ O sistema permite selecionar a distância de lançamento (0,5 m a 4,0 m) pelo ce
 3. **[Instalação do Firmware](#instalação-do-firmware)** — Upload no ESP32
 4. **[App Mobile](#execução-do-aplicativo-mobile)** — React Native
 5. **[Calibração](#procedimento-de-calibração)** — Ajustar distâncias
-6. **[Circuito e Hardware](#avaliação-do-circuito)** — Esquemático e componentes
-7. **[Troubleshooting](#solução-de-problemas)** — Diagnosticar problemas
+6. **[Montagem do Circuito](#montagem-do-circuito)** — Ligações, alimentação e fim de curso
+7. **[Circuito e Hardware](#avaliação-do-circuito)** — Esquemático e componentes
+8. **[Arquitetura do Código](#arquitetura-do-código)** — Como mexer sem quebrar a FSM
+9. **[Troubleshooting](#solução-de-problemas)** — Diagnosticar problemas
 
 ---
 
@@ -40,9 +42,15 @@ O sistema permite selecionar a distância de lançamento (0,5 m a 4,0 m) pelo ce
 
 ### Opção 1: Simular no Wokwi (5 minutos)
 ```bash
-# No VS Code:
-F1 → Wokwi: Start Simulator
-# Abra o Serial Monitor → Digite: SET:1.50  ARM  FIRE  ABORT  HOME
+cd "/home/marcos-kalile/Código ESP32/hercules-i"
+tools/build-wokwi.sh
+
+# No VS Code, abra a pasta hercules-i/wokwi e rode:
+# F1 -> Wokwi: Start Simulator
+
+# Em outro terminal:
+tools/wokwi-console.py
+# Digite: STATUS, SET:1.50, ARM, FIRE
 ```
 
 ### Opção 2: Carregar no ESP32 (15 minutos)
@@ -53,6 +61,8 @@ F1 → Wokwi: Start Simulator
 # 3. Ferramentas → Porta → /dev/ttyUSB0
 # 4. Clique "Carregar" (→)
 ```
+
+Antes de armar a catapulta real, teste o comando `HOME` com o mecanismo sem carga e confirme que o fim de curso zera a posição.
 
 ### Opção 3: Testar com App Mobile (30 minutos)
 ```bash
@@ -105,7 +115,7 @@ hercules-i/
 - **Mutex FreeRTOS no buffer de comandos:** `xSemaphoreCreateMutex()` protege `bufferComando`/`novoComando`, garantindo que um comando não seja corrompido por escrita concorrente da task BLE.
 - **`posicaoMotor` removida:** variável morta eliminada; posição rastreada internamente pelo `AccelStepper::currentPosition()`.
 - **Motor habilitado durante ARMED:** driver permanece ativo no estado ARMED para evitar deriva do motor causada pela tensão do elástico. Impacto: aquecimento moderado do driver por até 30 s (tempo do timeout).
-- **Homing com fim de curso:** sequência de homing executada no `setup()` e via comando `HOME`. Motor recua até acionar o microswitch (GPIO 25) e zera a posição — garante reprodutibilidade entre ciclos.
+- **Homing com fim de curso:** no firmware real, a sequência roda no `setup()` e também pelo comando `HOME`. Na simulação, o homing inicial foi desativado para facilitar testes no console; use `HOME` manualmente para testar o botão.
 - **Delay do FIRING não-bloqueante:** substituído `delay(500)` por timestamp (`millis()`), mantendo o loop responsivo durante a atuação do servo.
 - **Novo estado HOMING** adicionado à FSM.
 - **Novo comando BLE `HOME`:** re-executa homing em campo sem precisar reinicializar o ESP32.
@@ -120,7 +130,7 @@ hercules-i/
 | DIR (motor)         | 27   | Direção do motor — driver A4988/DRV8825        |
 | ENABLE (motor)      | 14   | Habilita driver (LOW = ativo)                  |
 | Servo (disparo)     | 13   | PWM do servo SG90/MG996R                       |
-| Fim de curso        | 25   | Microswitch NC — homing (INPUT_PULLUP)         |
+| Fim de curso        | 25   | Microswitch ativo em LOW — homing (INPUT_PULLUP) |
 | ADC Bateria         | 34   | Entrada analógica only — divisor resistivo     |
 | LED status          | 2    | LED onboard do ESP32                           |
 
@@ -133,6 +143,137 @@ Banco (9V) ── R1 (100 kΩ) ──┬── R2 (10 kΩ) ── GND
 Fator = (R1 + R2) / R2 = (100k + 10k) / 10k = 11
 Tensão no pino = V_bat / 11  (≤ 3,3 V para o ADC do ESP32)
 ```
+
+---
+
+## Montagem do Circuito
+
+Esta seção descreve a montagem recomendada para o protótipo físico. O Wokwi valida a lógica, mas não substitui alguns cuidados elétricos do circuito real.
+
+### Alimentação
+
+Use uma referência de terra comum para todos os módulos:
+
+```text
+GND bateria / step-down / ESP32 / A4988 / servo -> todos conectados
+```
+
+Distribuição recomendada:
+
+| Linha | Alimenta | Observação |
+|-------|----------|------------|
+| `+9V` bruto | Entrada do step-down e VMOT do A4988, se o driver aceitar essa alimentação | Coloque capacitor perto do driver |
+| `+5V` regulado | Servo e, se necessário, pino 5V/VIN do ESP32 | Não alimente servo pelo 3V3 |
+| `+3V3` do ESP32 | Lógica do A4988, pullups e sensores leves | Não usar para motor/servo |
+| `GND` | Todos os módulos | Terra comum é obrigatório |
+
+No A4988/DRV8825, coloque perto dos pinos de alimentação do motor:
+
+```text
+VMOT -> capacitor eletrolítico 100 uF -> GND
+VMOT -> capacitor cerâmico 100 nF -> GND
+```
+
+### Ligações do A4988 / DRV8825
+
+| ESP32 | Driver | Função |
+|-------|--------|--------|
+| GPIO 26 | STEP | Pulso de passo |
+| GPIO 27 | DIR | Sentido |
+| GPIO 14 | ENABLE | Ativo em LOW |
+| 3V3 | VDD | Lógica |
+| GND | GND | Terra comum |
+
+Pinos do driver:
+
+```text
+SLEEP e RESET: manter em HIGH
+MS1, MS2, MS3: GND para full-step inicial
+VMOT: alimentação do motor
+1A/1B/2A/2B: bobinas do NEMA 17
+```
+
+Antes de acoplar o motor ao elástico, ajuste o limite de corrente do A4988/DRV8825. Comece baixo, teste aquecimento e aumente apenas o suficiente para não perder passos.
+
+### Servo de disparo
+
+O sinal do servo sai do GPIO 13. Use um resistor em série:
+
+```text
+GPIO 13 -> resistor 220 ohm -> sinal PWM do servo
+```
+
+Alimente o servo pela linha `+5V` do step-down, não pelo pino `3V3` do ESP32. Se usar MG996R ou outro servo forte, dimensione a fonte para picos de corrente altos.
+
+### Monitoramento de bateria
+
+O GPIO 34 é apenas entrada analógica. Use o divisor:
+
+```text
++9V bateria -> R1 100k -> GPIO 34 -> R2 10k -> GND
+```
+
+Essa divisão transforma 9 V em aproximadamente 0,82 V no ADC, dentro do limite do ESP32. Se mudar a bateria, recalcule o divisor antes de ligar ao GPIO.
+
+### Fim de curso e homing
+
+O firmware atual usa:
+
+```cpp
+pinMode(PIN_ENDSTOP, INPUT_PULLUP);
+#define ENDSTOP_ACTIVE_LEVEL LOW
+```
+
+Montagem mais simples para o firmware atual:
+
+```text
+GPIO 25 -> contato NO do microswitch
+GND     -> comum do microswitch
+```
+
+Assim, fora da posição home o pino fica em `HIGH` pelo pullup interno. Quando o mecanismo encosta no fim de curso, o contato fecha para GND e o pino vira `LOW`, que é o valor definido por `ENDSTOP_ACTIVE_LEVEL`.
+
+Se quiser uma montagem fail-safe com contato NC, troque no firmware e na simulação:
+
+```cpp
+#define ENDSTOP_ACTIVE_LEVEL HIGH
+#define ENDSTOP_INACTIVE_LEVEL LOW
+```
+
+Essa montagem é mais segura contra fio rompido, mas exige testar cuidadosamente o comando `HOME` antes de acoplar o elástico.
+
+### O fim de curso é realmente necessário?
+
+Não é obrigatório para uma demonstração curta, mas é fortemente recomendado para um lançador calibrado.
+
+Sem fim de curso, o motor de passo não sabe onde está após:
+
+- reset do ESP32;
+- desligamento da bateria;
+- perda de passos por excesso de carga;
+- comando `ABORT` interrompido;
+- montagem manual fora da posição zero.
+
+Nesses casos, a lookup table deixa de representar a tensão real do elástico. Um valor como `SET:1.50` pode tensionar mais ou menos do que deveria porque o zero físico mudou.
+
+Você pode operar sem fim de curso apenas se aceitar este procedimento manual:
+
+1. Desligar o sistema.
+2. Levar o mecanismo manualmente para a posição de repouso.
+3. Ligar o ESP32.
+4. Não permitir perda de passos durante os testes.
+
+Para competição ou demonstração repetível, use o fim de curso.
+
+### Sequência Segura de Montagem
+
+1. Monte ESP32, driver e motor sem elástico.
+2. Ajuste corrente do driver com o motor sem carga.
+3. Teste `HOME` e confirme que o motor para ao acionar o fim de curso.
+4. Teste `SET:0.50`, `ARM`, `ABORT`.
+5. Conecte o servo sem projétil e teste `FIRE`.
+6. Adicione elástico com baixa tensão.
+7. Calibre distâncias curtas antes de tentar 3 m ou 4 m.
 
 ---
 
@@ -203,6 +344,72 @@ STATUS (N): 12345678-1234-1234-1234-123456789ab2
 
 ---
 
+## Arquitetura do Código
+
+O projeto tem duas versões de firmware:
+
+| Arquivo | Uso | Observação |
+|---------|-----|------------|
+| `firmware/hercules_firmware/hercules_firmware.ino` | ESP32 real com BLE | Código de produção |
+| `wokwi/sketch.ino` | Simulação Wokwi com Serial | Espelha a FSM, mas sem BLE/FreeRTOS |
+
+### Responsabilidades Principais
+
+| Bloco | Responsabilidade |
+|-------|------------------|
+| Lookup table | Converter distância alvo em passos de motor |
+| FSM | Controlar transições entre `IDLE`, `HOMING`, `TENSIONING`, `ARMED`, `FIRING`, `RETURNING` |
+| Motor | Executar `moveTo()`, `run()`, retorno ao zero e homing |
+| Servo | Manter gatilho travado e liberar no disparo |
+| BLE / Serial | Receber comandos e emitir status |
+| Bateria | Ler ADC, estimar percentual e sinalizar nível crítico |
+| LED | Informar estado da FSM e bateria crítica |
+
+### Regras para Mexer sem Quebrar
+
+- Não chame funções longas dentro da callback BLE. A callback deve apenas copiar comando e sinalizar flags.
+- Não use `delay()` no loop principal. Use timestamps com `millis()`.
+- Enquanto `TENSIONING` ou `RETURNING`, chame `motor.run()` o mais frequentemente possível.
+- Só aceite `ARM` em `IDLE` e `FIRE` em `ARMED`.
+- Depois de qualquer alteração em motor ou estados, teste `ABORT` durante movimento.
+- Se alterar a tabela de calibração, mantenha `TABLE_SIZE`, `DIST_MIN_M`, `DIST_MAX_M` e `DIST_STEP_M` coerentes.
+
+### Pontos que Merecem Refatoração Humana
+
+Esses pontos não impedem o protótipo de funcionar, mas deixariam o projeto mais robusto:
+
+| Prioridade | Refatoração | Por quê |
+|------------|-------------|---------|
+| Alta | Extrair parser de comandos para função pura | Facilita testar `SET`, `CAL`, `ARM`, `FIRE` sem hardware |
+| Média | Compartilhar tabela entre firmware e simulação | Hoje `wokwi/sketch.ino` copia manualmente os valores do `lookup_table.h` |
+| Média | Trocar `String` por buffer fixo em comandos | Reduz risco de fragmentação de heap em execução longa |
+| Média | Persistir calibração em NVS/Preferences | Comandos `CAL` hoje valem apenas até reiniciar |
+| Baixa | Separar `motor`, `ble`, `battery`, `fsm` em arquivos `.h/.cpp` | Melhora legibilidade quando o protótipo estabilizar |
+
+### Teste Manual Mínimo após Refatorar
+
+Depois de qualquer mudança no firmware, execute esta sequência:
+
+```text
+STATUS
+HOME
+SET:1.00
+ARM
+ABORT
+STATUS
+SET:1.50
+ARM
+FIRE
+STATUS
+CAL:1.50:395
+SET:1.50
+STATUS
+```
+
+Na simulação, o `HOME` exige pressionar o botão verde. No hardware real, confirme visualmente que o mecanismo encostou no fim de curso e zerou antes de continuar.
+
+---
+
 ## Avaliação do Circuito
 
 ### Torque do motor de passo
@@ -229,9 +436,9 @@ Para elásticos de laboratório leves, isso pode ser suficiente. Para alcances s
 
 **Problema:** sem sensor de referência, qualquer reset de energia ou perda de passo causa deriva de posição acumulada entre ciclos.
 
-**Solução implementada (v1.1.0):** homing via microswitch NC (GPIO 25) executado a cada inicialização e disponível pelo comando `HOME`. O motor recua até acionar o switch e zera a posição internamente via `motor.setCurrentPosition(0)`.
+**Solução implementada (v1.1.0):** homing via microswitch ativo em `LOW` no GPIO 25, executado a cada inicialização no firmware real e disponível pelo comando `HOME`. O motor recua até acionar o switch e zera a posição internamente via `motor.setCurrentPosition(0)`.
 
-**Recomendação de hardware:** use um microswitch NC como o **Omron SS-5GL** ou similar, montado no ponto de retorno máximo do mecanismo (posição de repouso da mola/elástico totalmente relaxado).
+**Recomendação de hardware:** use um microswitch com contatos `COM`, `NO` e `NC`, como o **Omron SS-5GL** ou similar. Com o firmware atual, use `COM + NO` para que o GPIO 25 vá a `LOW` quando o mecanismo encostar no fim de curso. Para usar `COM + NC` em modo fail-safe, inverta a lógica no firmware.
 
 ### Problemas críticos identificados no circuito
 
@@ -240,7 +447,7 @@ Para elásticos de laboratório leves, isso pode ser suficiente. Para alcances s
 | Sem capacitor no VMOT do driver | Picos de back-EMF ao acionar o motor podem queimar o A4988/DRV8825 | Adicionar 100 µF eletrolítico + 100 nF cerâmico em paralelo no pino VMOT |
 | Servo alimentado pelo 5V do ESP32 | MG996R consome até 2,5 A em stall — brownout no ESP32 | Alimentar o servo diretamente pela saída do step-down, não pelo pino 5V do ESP32 |
 | Sem resistor na linha PWM do servo | Descarga eletrostática pode queimar o GPIO 13 | Adicionar 220 Ω em série entre GPIO 13 e o sinal PWM |
-| Sem fim de curso (v1.0) | Posição perdida a cada reset | Corrigido na v1.1.0: microswitch NC no GPIO 25 |
+| Sem fim de curso (v1.0) | Posição perdida a cada reset | Corrigido na v1.1.0: microswitch ativo em LOW no GPIO 25 |
 
 ---
 
@@ -257,7 +464,7 @@ O Wokwi serve para **simulação funcional**. Para documentação do circuito re
 | U3   | Conversor step-down  | MP1584 (módulo)             | 1   |
 | M1   | Motor de passo       | NEMA 17, 4 fios             | 1   |
 | SV1  | Servo motor          | SG90 ou MG996R              | 1   |
-| SW1  | Microswitch fim de curso | NC — ex: Omron SS-5GL   | 1   |
+| SW1  | Microswitch fim de curso | COM+NO no firmware atual; NC exige inversão lógica | 1   |
 | BT1  | Porta-pilhas         | 6× AA (9 V total)           | 1   |
 | C1   | Capacitor eletrolítico | 100 µF / 16 V             | 1   |
 | C2   | Capacitor cerâmico   | 100 nF                      | 1   |
@@ -338,7 +545,7 @@ SV1(Signal) ← R3(220Ω) ← ESP32(GPIO 13)
 **Bloco 5 — Fim de Curso (Endstop)**
 
 ```
-SW1(pino NC) ← ESP32(GPIO 25)
+SW1(pino NO) ← ESP32(GPIO 25)
 SW1(pino C)  ← GND
 
 R5(10kΩ): entre +3V3 e ESP32(GPIO 25)    [pullup externo]
@@ -381,102 +588,6 @@ Ajuste com o motor aquecendo durante 5 minutos e meça a temperatura do driver. 
 2. Coloque um símbolo `PWR_FLAG` nos nets `+9V`, `+5V` e `GND` para evitar erros de ERC.
 3. Organize o esquemático em regiões com caixas de texto: *Alimentação*, *Controle*, *Driver + Motor*, *Atuadores*.
 4. Exporte: **File → Export → PDF** para documentação, ou **Export → Netlist** para fabricação de PCB.
-
----
-
-## Avaliação do Circuito
-
-### Torque do Motor (NEMA 17)
-- **Holding torque:** ~40 N·cm (típico do 17HS4401)
-- **Running torque:** ~28 N·cm a 9V
-- **Força linear (raio 5mm):** ~56 N
-- **Recomendação:** Suficiente para elásticos leves. Para alcances >3m, considere gear reduction (worm 10:1) ou NEMA 23.
-
-### Padronização de Posição
-✅ **Resolvido no firmware v1.1.0:** comando `HOME` executa homing via endstop NC (GPIO 25), calibrando o zero reprodutível antes de cada ciclo.
-
-### Problemas do Circuito Original
-| Problema | Risco | Solução |
-|----------|-------|---------|
-| Sem capacitor VMOT | Back-EMF queima A4988 | 100 µF + 100 nF em paralelo |
-| Servo alimentado do ESP32 | Brownout se MG996R | Alimentar direto do step-down |
-| Sem proteção GPIO PWM | ESD danifica pino | Resistor 220Ω na linha PWM |
-| Sem endstop | Posição perdida | Adicionado (GPIO 25, NC) |
-
-### Esquemático Completo em EasyEDA
-Para recriar o circuito real em [EasyEDA](https://easyeda.com), use esta **BOM e conexões:**
-
-**Lista de Componentes (BOM)**
-
-| Ref | Componente | Valor | Qtd |
-|-----|-----------|-------|-----|
-| U1 | ESP32 DevKit V1 | ESP32-WROOM-32 | 1 |
-| U2 | Driver motor | A4988 ou DRV8825 | 1 |
-| U3 | Conversor step-down | MP1584 (módulo) | 1 |
-| M1 | Motor de passo | NEMA 17 (4 fios) | 1 |
-| SV1 | Servo | SG90 ou MG996R | 1 |
-| SW1 | Endstop | Microswitch NC | 1 |
-| BT1 | Bateria | 6× AA (9V) | 1 |
-| C1 | Capacitor | 100 µF / 16V | 1 |
-| C2 | Capacitor | 100 nF | 1 |
-| R1 | Resistor divisor | 100 kΩ | 1 |
-| R2 | Resistor divisor | 10 kΩ | 1 |
-| R3 | Proteção servo | 220 Ω | 1 |
-| R4 | Limitador LED | 220 Ω | 1 |
-| R5 | Pullup endstop | 10 kΩ | 1 |
-| LED1 | LED status | 5mm amarelo | 1 |
-
-**Redes de Alimentação:** Crie em EasyEDA: `+9V`, `+5V`, `+3V3`, `GND`
-
-**Bloco 1 — Alimentação**
-```
-BT1(+) ──→ +9V
-BT1(−) ──→ GND
-U3(VIN)  ← +9V
-U3(VOUT) → +5V (ajustar trimpot para 5,0V)
-```
-
-**Bloco 2 — Driver A4988**
-```
-U2(VMOT) ← +9V,  C1(100µF) paralelo com C2(100nF) aqui
-U2(VDD)  ← +3V3
-U2(STEP) ← ESP32(GPIO26)
-U2(DIR)  ← ESP32(GPIO27)
-U2(EN)   ← ESP32(GPIO14)
-U2(SLP/RST) → +3V3 (driver sempre ativo)
-U2(MS1/MS2/MS3) → GND (full-step para máximo torque)
-```
-
-**Bloco 3 — Motor NEMA 17**
-```
-U2(1A) ← M1(A+),  U2(1B) ← M1(A−)
-U2(2A) ← M1(B+),  U2(2B) ← M1(B−)
-```
-
-**Bloco 4 — Servo**
-```
-SV1(VCC) ← +5V (alimentação separada do ESP32 se possível)
-SV1(SIG) ← R3(220Ω) ← ESP32(GPIO13)
-SV1(GND) ← GND
-```
-
-**Bloco 5 — Endstop (NC)**
-```
-SW1(NC)  ← ESP32(GPIO25)
-R5(10kΩ) entre +3V3 e GPIO25 (pullup externo — firmware já ativa pullup interno)
-SW1(outro lado) ← GND
-```
-
-**Bloco 6 — Monitor de Bateria**
-```
-+9V ── R1(100kΩ) ──┬── R2(10kΩ) ── GND
-                   └── ESP32(GPIO34)
-```
-
-**Bloco 7 — LED de Status**
-```
-ESP32(GPIO2) ── R4(220Ω) ── LED1(anodo) ── LED1(catodo) ── GND
-```
 
 ---
 

@@ -20,9 +20,9 @@
  *
  *  GPIO 26  → STEP   (driver A4988/DRV8825)
  *  GPIO 27  → DIR    (driver A4988/DRV8825)
- *  GPIO 14  → ENABLE (driver A4988/DRV8825) — ativo em LOW
+ *  GPIO 14  → ENABLE (driver A4988/DRV8825) — ativo em MOTOR_ENABLE_ACTIVE_LEVEL
  *  GPIO 13  → Sinal PWM do servo (SG90 / MG996R)
- *  GPIO 25  → Fim de curso / endstop (NC, ativo em LOW, pullup interno)
+ *  GPIO 25  → Fim de curso / endstop (ativo em ENDSTOP_ACTIVE_LEVEL, pullup interno)
  *  GPIO 34  → ADC monitoramento de bateria (entrada analógica only)
  *  GPIO  2  → LED de status onboard
  *
@@ -55,9 +55,17 @@
 #define PIN_DIR      27
 #define PIN_ENABLE   14
 #define PIN_SERVO    13
-#define PIN_ENDSTOP  25   // Fim de curso NC: LOW = acionado (motor em home)
+#define PIN_ENDSTOP  25
 #define PIN_ADC_BAT  34
 #define PIN_LED       2
+
+// Níveis lógicos configuráveis.
+// Endstop COM+NO para GND: ativo em LOW (padrão atual).
+// Endstop COM+NC para GND: ativo em HIGH; troque ENDSTOP_ACTIVE_LEVEL para HIGH.
+#define MOTOR_ENABLE_ACTIVE_LEVEL   LOW
+#define MOTOR_ENABLE_INACTIVE_LEVEL HIGH
+#define ENDSTOP_ACTIVE_LEVEL        LOW
+#define ENDSTOP_INACTIVE_LEVEL      HIGH
 
 // ─── Configurações do motor ───────────────────────────────────────────────
 #define MOTOR_MAX_SPEED    500.0f
@@ -144,8 +152,12 @@ void enviarStatus(const String& mensagem) {
     Serial.println(mensagem);
 }
 
-void habilitarMotor()   { digitalWrite(PIN_ENABLE, LOW);  }
-void desabilitarMotor() { digitalWrite(PIN_ENABLE, HIGH); }
+void habilitarMotor()   { digitalWrite(PIN_ENABLE, MOTOR_ENABLE_ACTIVE_LEVEL);   }
+void desabilitarMotor() { digitalWrite(PIN_ENABLE, MOTOR_ENABLE_INACTIVE_LEVEL); }
+
+bool endstopAcionado() {
+    return digitalRead(PIN_ENDSTOP) == ENDSTOP_ACTIVE_LEVEL;
+}
 
 int distanciaParaIndice(float dist_m) {
     if (dist_m < DIST_MIN_M || dist_m > DIST_MAX_M) return -1;
@@ -237,7 +249,7 @@ void executarHoming() {
     enviarStatus("HOMING");
     estadoAtual = HOMING;
 
-    if (digitalRead(PIN_ENDSTOP) == LOW) {
+    if (endstopAcionado()) {
         // Já está em home
         motor.setCurrentPosition(0);
         desabilitarMotor();
@@ -251,7 +263,7 @@ void executarHoming() {
     motor.setMaxSpeed(HOMING_SPEED);
     motor.move(-HOMING_MAX_STEPS);
 
-    while (digitalRead(PIN_ENDSTOP) == HIGH && motor.distanceToGo() != 0) {
+    while (!endstopAcionado() && motor.distanceToGo() != 0) {
         motor.run();
         yield();  // Previne watchdog reset e permite task BLE rodar
     }
@@ -262,7 +274,7 @@ void executarHoming() {
     desabilitarMotor();
     estadoAtual = IDLE;
 
-    if (digitalRead(PIN_ENDSTOP) == LOW) {
+    if (endstopAcionado()) {
         Serial.println("[HOMING] Posição zero estabelecida com sucesso.");
         enviarStatus("HOME_OK");
     } else {
@@ -291,16 +303,16 @@ class ServerCallbacks : public BLEServerCallbacks {
 
 class CmdCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pChar) override {
-        std::string valor = pChar->getValue();
+        String valor = pChar->getValue();
         if (valor.length() > 0 && cmdMutex != nullptr) {
             // Mutex com timeout curto: se não conseguir em 10 ms, descarta
             if (xSemaphoreTake(cmdMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-                bufferComando = String(valor.c_str());
+                bufferComando = valor;
                 novoComando   = true;
                 xSemaphoreGive(cmdMutex);
             }
             Serial.print("[BLE RX] ");
-            Serial.println(String(valor.c_str()));
+            Serial.println(valor);
         }
     }
 };
