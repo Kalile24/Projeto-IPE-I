@@ -5,6 +5,63 @@
 Catapulta de palitos de picolé com controle programável via Bluetooth Low Energy (BLE).
 O sistema permite selecionar a distância de lançamento (0,5 m a 4,0 m) pelo celular e acionar o disparo remotamente.
 
+![Hardware](https://img.shields.io/badge/Hardware-ESP32%20%2B%20A4988%20%2B%20NEMA17-blue)
+![Firmware](https://img.shields.io/badge/Firmware-v1.1.0-brightgreen)
+![App](https://img.shields.io/badge/App-React%20Native%20%2B%20Expo-blueviolet)
+![Simulação](https://img.shields.io/badge/Simulação-Wokwi-orange)
+
+---
+
+## 🎯 Sumário Executivo
+
+| Aspecto | Status |
+|---------|--------|
+| **Firmware** | v1.1.0 — Non-blocking FSM, homing, mutex FreeRTOS |
+| **Hardware** | ESP32 + A4988 + NEMA 17 + SG90 + Endstop NC + Bateria 9V |
+| **Simulação** | Wokwi — A4988 + AccelStepper (idêntico ao real) |
+| **Alcance** | 0,5 m a 4,0 m (via lookup table calibrável) |
+| **Controle** | BLE (app mobile) ou Serial Monitor (testes) |
+
+---
+
+## 📚 Índice Rápido
+
+1. **[Comece aqui](#comece-aqui)** — Setup e quick start
+2. **[Simulação no Wokwi](#simulação-no-wokwi)** — Testar sem hardware
+3. **[Instalação do Firmware](#instalação-do-firmware)** — Upload no ESP32
+4. **[App Mobile](#execução-do-aplicativo-mobile)** — React Native
+5. **[Calibração](#procedimento-de-calibração)** — Ajustar distâncias
+6. **[Circuito e Hardware](#avaliação-do-circuito)** — Esquemático e componentes
+7. **[Troubleshooting](#solução-de-problemas)** — Diagnosticar problemas
+
+---
+
+## 🚀 Comece aqui
+
+### Opção 1: Simular no Wokwi (5 minutos)
+```bash
+# No VS Code:
+F1 → Wokwi: Start Simulator
+# Abra o Serial Monitor → Digite: SET:1.50  ARM  FIRE  ABORT  HOME
+```
+
+### Opção 2: Carregar no ESP32 (15 minutos)
+```bash
+# Requisitos: Arduino IDE 2.x + ESP32 + USB
+# 1. Abra: hercules-i/firmware/hercules_firmware/
+# 2. Ferramentas → Placa → ESP32 Dev Module
+# 3. Ferramentas → Porta → /dev/ttyUSB0
+# 4. Clique "Carregar" (→)
+```
+
+### Opção 3: Testar com App Mobile (30 minutos)
+```bash
+cd hercules-i/app/hercules-app
+npm install
+npx expo start
+# Escaneie QR com Expo Go (Android/iOS)
+```
+
 ---
 
 ## Estrutura do Projeto
@@ -324,6 +381,102 @@ Ajuste com o motor aquecendo durante 5 minutos e meça a temperatura do driver. 
 2. Coloque um símbolo `PWR_FLAG` nos nets `+9V`, `+5V` e `GND` para evitar erros de ERC.
 3. Organize o esquemático em regiões com caixas de texto: *Alimentação*, *Controle*, *Driver + Motor*, *Atuadores*.
 4. Exporte: **File → Export → PDF** para documentação, ou **Export → Netlist** para fabricação de PCB.
+
+---
+
+## Avaliação do Circuito
+
+### Torque do Motor (NEMA 17)
+- **Holding torque:** ~40 N·cm (típico do 17HS4401)
+- **Running torque:** ~28 N·cm a 9V
+- **Força linear (raio 5mm):** ~56 N
+- **Recomendação:** Suficiente para elásticos leves. Para alcances >3m, considere gear reduction (worm 10:1) ou NEMA 23.
+
+### Padronização de Posição
+✅ **Resolvido no firmware v1.1.0:** comando `HOME` executa homing via endstop NC (GPIO 25), calibrando o zero reprodutível antes de cada ciclo.
+
+### Problemas do Circuito Original
+| Problema | Risco | Solução |
+|----------|-------|---------|
+| Sem capacitor VMOT | Back-EMF queima A4988 | 100 µF + 100 nF em paralelo |
+| Servo alimentado do ESP32 | Brownout se MG996R | Alimentar direto do step-down |
+| Sem proteção GPIO PWM | ESD danifica pino | Resistor 220Ω na linha PWM |
+| Sem endstop | Posição perdida | Adicionado (GPIO 25, NC) |
+
+### Esquemático Completo em EasyEDA
+Para recriar o circuito real em [EasyEDA](https://easyeda.com), use esta **BOM e conexões:**
+
+**Lista de Componentes (BOM)**
+
+| Ref | Componente | Valor | Qtd |
+|-----|-----------|-------|-----|
+| U1 | ESP32 DevKit V1 | ESP32-WROOM-32 | 1 |
+| U2 | Driver motor | A4988 ou DRV8825 | 1 |
+| U3 | Conversor step-down | MP1584 (módulo) | 1 |
+| M1 | Motor de passo | NEMA 17 (4 fios) | 1 |
+| SV1 | Servo | SG90 ou MG996R | 1 |
+| SW1 | Endstop | Microswitch NC | 1 |
+| BT1 | Bateria | 6× AA (9V) | 1 |
+| C1 | Capacitor | 100 µF / 16V | 1 |
+| C2 | Capacitor | 100 nF | 1 |
+| R1 | Resistor divisor | 100 kΩ | 1 |
+| R2 | Resistor divisor | 10 kΩ | 1 |
+| R3 | Proteção servo | 220 Ω | 1 |
+| R4 | Limitador LED | 220 Ω | 1 |
+| R5 | Pullup endstop | 10 kΩ | 1 |
+| LED1 | LED status | 5mm amarelo | 1 |
+
+**Redes de Alimentação:** Crie em EasyEDA: `+9V`, `+5V`, `+3V3`, `GND`
+
+**Bloco 1 — Alimentação**
+```
+BT1(+) ──→ +9V
+BT1(−) ──→ GND
+U3(VIN)  ← +9V
+U3(VOUT) → +5V (ajustar trimpot para 5,0V)
+```
+
+**Bloco 2 — Driver A4988**
+```
+U2(VMOT) ← +9V,  C1(100µF) paralelo com C2(100nF) aqui
+U2(VDD)  ← +3V3
+U2(STEP) ← ESP32(GPIO26)
+U2(DIR)  ← ESP32(GPIO27)
+U2(EN)   ← ESP32(GPIO14)
+U2(SLP/RST) → +3V3 (driver sempre ativo)
+U2(MS1/MS2/MS3) → GND (full-step para máximo torque)
+```
+
+**Bloco 3 — Motor NEMA 17**
+```
+U2(1A) ← M1(A+),  U2(1B) ← M1(A−)
+U2(2A) ← M1(B+),  U2(2B) ← M1(B−)
+```
+
+**Bloco 4 — Servo**
+```
+SV1(VCC) ← +5V (alimentação separada do ESP32 se possível)
+SV1(SIG) ← R3(220Ω) ← ESP32(GPIO13)
+SV1(GND) ← GND
+```
+
+**Bloco 5 — Endstop (NC)**
+```
+SW1(NC)  ← ESP32(GPIO25)
+R5(10kΩ) entre +3V3 e GPIO25 (pullup externo — firmware já ativa pullup interno)
+SW1(outro lado) ← GND
+```
+
+**Bloco 6 — Monitor de Bateria**
+```
++9V ── R1(100kΩ) ──┬── R2(10kΩ) ── GND
+                   └── ESP32(GPIO34)
+```
+
+**Bloco 7 — LED de Status**
+```
+ESP32(GPIO2) ── R4(220Ω) ── LED1(anodo) ── LED1(catodo) ── GND
+```
 
 ---
 
