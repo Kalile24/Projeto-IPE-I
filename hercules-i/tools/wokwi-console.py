@@ -12,10 +12,8 @@ import argparse
 import select
 import socket
 import sys
-import termios
 import threading
 import time
-import tty
 
 
 HOST = "127.0.0.1"
@@ -71,7 +69,6 @@ def filter_telnet(sock: socket.socket, data: bytes) -> bytes:
 
 
 def read_loop(sock: socket.socket, stop: threading.Event) -> None:
-    last_rx = time.monotonic()
     while not stop.is_set():
         readable, _, _ = select.select([sock], [], [], READ_TIMEOUT_S)
         if not readable:
@@ -87,7 +84,6 @@ def read_loop(sock: socket.socket, stop: threading.Event) -> None:
             return
         payload = filter_telnet(sock, data)
         if payload:
-            last_rx = time.monotonic()
             sys.stdout.buffer.write(payload)
             sys.stdout.buffer.flush()
 
@@ -101,23 +97,18 @@ def run_interactive(sock: socket.socket) -> int:
     reader = threading.Thread(target=read_loop, args=(sock, stop), daemon=True)
     reader.start()
 
-    old_tty = termios.tcgetattr(sys.stdin)
     try:
-        tty.setcbreak(sys.stdin.fileno())
         print("Conectado em 127.0.0.1:4000.")
-        print("Digite STATUS e pressione Enter. Use Ctrl+C para sair.\n")
-        while not stop.is_set():
-            readable, _, _ = select.select([sys.stdin], [], [], 0.1)
-            if not readable:
+        print("Digite uma linha por comando. Exemplos: STATUS, SET:1.50, ARM, FIRE.")
+        print("Use Ctrl+C ou Ctrl+D para sair.\n")
+        time.sleep(0.2)
+        for line in sys.stdin:
+            command = line.strip()
+            if not command:
                 continue
-            ch = sys.stdin.read(1)
-            if ch == "\x03":
-                print("\n[console] Saindo.")
-                break
-            sock.sendall(ch.encode("utf-8"))
+            send_line(sock, command)
     finally:
         stop.set()
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_tty)
         sock.close()
 
     return 0

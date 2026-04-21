@@ -16,5 +16,6 @@ fi
 "$CLI_DIR/arduino-cli" --config-file "$CONFIG" core update-index
 "$CLI_DIR/arduino-cli" --config-file "$CONFIG" core install esp32:esp32
 "$CLI_DIR/arduino-cli" --config-file "$CONFIG" lib install ESP32Servo
+"$CLI_DIR/arduino-cli" --config-file "$CONFIG" lib install AccelStepper
 
 echo "Arduino CLI pronto em $CLI_DIR/arduino-cli"

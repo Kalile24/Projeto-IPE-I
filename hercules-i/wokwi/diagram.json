@@ -125,8 +125,8 @@
     ["esp:D27", "driver:DIR",    "green",  []],
     ["esp:D14", "driver:ENABLE", "orange", []],
 
-    ["esp:3V3", "driver:SLP", "red",   []],
-    ["esp:3V3", "driver:RST", "red",   []],
+    ["esp:3V3", "driver:SLEEP", "red",   []],
+    ["esp:3V3", "driver:RESET", "red",   []],
     ["esp:GND", "driver:MS1", "black", []],
     ["esp:GND", "driver:MS2", "black", []],
     ["esp:GND", "driver:MS3", "black", []],
@@ -136,10 +136,10 @@
     ["esp:3V3", "driver:VDD",   "red",   []],
     ["esp:GND", "driver:GND.1", "black", []],
 
-    ["driver:1A", "motor:A+", "green", []],
-    ["driver:1B", "motor:A-", "green", []],
-    ["driver:2A", "motor:B+", "green", []],
-    ["driver:2B", "motor:B-", "green", []],
+    ["driver:1B", "motor:B-", "green", []],
+    ["driver:1A", "motor:B+", "green", []],
+    ["driver:2A", "motor:A+", "green", []],
+    ["driver:2B", "motor:A-", "green", []],
 
     ["esp:D13",   "r_servo:1", "purple", []],
     ["r_servo:2", "servo:PWM", "purple", []],

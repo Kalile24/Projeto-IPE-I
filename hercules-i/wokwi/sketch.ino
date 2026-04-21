@@ -9,7 +9,7 @@
  *   - Motor controlado via A4988 com AccelStepper no modo DRIVER (STEP/DIR/ENABLE)
  *   - Pinagem e FSM idênticas ao hercules_firmware.ino
  *   - Controle não-bloqueante: motor.run() chamado a cada ciclo do loop()
- *   - Homing via botão Endstop (GPIO 25) — pressione no diagrama quando solicitado
+ *   - Homing opcional via botão Endstop (GPIO 25), acionado pelo comando HOME
  *   - BLE substituído por Serial Monitor
  *
  * Diferenças inevitáveis em relação ao hardware real:
@@ -20,8 +20,8 @@
  * Como usar:
  *   1. Inicie a simulação (F1 → Wokwi: Start Simulator)
  *   2. Abra o Serial Monitor (9600 baud)
- *   3. Durante o homing automático, pressione o botão ENDSTOP (verde) no diagrama
- *   4. Digite comandos: SET:1.50  ARM  FIRE  ABORT  HOME  STATUS  TABELA  CAL:X.XX:NNN
+ *   3. Digite comandos: STATUS  SET:1.50  ARM  FIRE  ABORT  HOME  TABELA  CAL:X.XX:NNN
+ *   4. Para testar homing, envie HOME e pressione o botão ENDSTOP verde no diagrama
  *
  * === PINAGEM — idêntica ao firmware real =====================================
  *  GPIO 26  → A4988 STEP
@@ -303,7 +303,7 @@ void setup() {
     Serial.println("    ARM          — Arma a catapulta (não-bloqueante)");
     Serial.println("    FIRE         — Dispara");
     Serial.println("    ABORT        — Aborta e retorna ao zero");
-    Serial.println("    HOME         — Re-executa homing");
+    Serial.println("    HOME         — Executa homing com botão ENDSTOP");
     Serial.println("    STATUS       — Exibe status atual");
     Serial.println("    CAL:X.XX:N   — Calibra distância");
     Serial.println("    TABELA       — Exibe lookup table");
@@ -324,10 +324,7 @@ void setup() {
 
     analogReadResolution(12);
 
-    // Homing inicial — pressione o botão ENDSTOP quando solicitado
-    executarHoming();
-
-    Serial.println("[INIT] Sistema pronto.");
+    Serial.println("[INIT] Sistema pronto. Homing inicial ignorado na simulação; use HOME para testar o fim de curso.");
     Serial.print("> Comando: ");
 }
 

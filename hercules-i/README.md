@@ -490,7 +490,7 @@ A pasta `wokwi/` está preparada para rodar pela extensão do Wokwi no VS Code.
 |---------|--------|
 | `wokwi/sketch.ino` | Sketch principal da simulação (v1.1.0) |
 | `wokwi/diagram.json` | Circuito virtual: ESP32, motor, servo, LED, potenciômetro e botão endstop |
-| `wokwi/libraries.txt` | Declara a biblioteca `ESP32Servo` para o compilador do Wokwi web |
+| `wokwi/libraries.txt` | Declara `ESP32Servo` e `AccelStepper` para o compilador do Wokwi web |
 | `wokwi/wokwi.toml` | Configuração da extensão VS Code, incluindo porta serial `4000` |
 | `wokwi/build/` | Firmware `.bin` e `.elf` já compilados para a extensão |
 | `tools/build-wokwi.sh` | Recompila o firmware da simulação |
@@ -511,19 +511,18 @@ A pasta `wokwi/` está preparada para rodar pela extensão do Wokwi no VS Code.
 
 1. No VS Code, abra a pasta `hercules-i/wokwi`.
 2. Execute `F1 → Wokwi: Start Simulator`.
-3. Abra um terminal e rode:
+3. Abra um terminal normal do VS Code e rode:
 
 ```bash
 cd "/home/marcos-kalile/Código ESP32/hercules-i"
 tools/wokwi-console.py
 ```
 
-4. No console, envie comandos:
+4. No console, digite uma linha por comando e pressione Enter:
 
 ```
 STATUS
 SET:1.50
-HOME          ← pressione o botão Endstop no simulador quando solicitado
 ARM
 FIRE
 ABORT
@@ -531,9 +530,17 @@ TABELA
 CAL:1.50:395
 ```
 
+O console agora usa modo linha: o texto digitado aparece normalmente antes de ser enviado ao ESP32 simulado.
+
 ### Simulando o homing no Wokwi
 
-O comando `HOME` (ou o homing automático do `setup`) moverá o motor para trás e aguardará o botão **Endstop** (verde) ser pressionado no diagrama. Pressione-o para simular o motor chegando na posição home. A posição zero será estabelecida e o sistema transitará para IDLE.
+Na simulação, o homing inicial é ignorado para facilitar testes pelo console. Para testar o fim de curso manualmente, envie:
+
+```
+HOME
+```
+
+Enquanto o motor estiver em homing, pressione o botão **Endstop** verde no diagrama. A posição zero será estabelecida e o sistema voltará para `IDLE`.
 
 ### Fidelidade ao hardware real
 
