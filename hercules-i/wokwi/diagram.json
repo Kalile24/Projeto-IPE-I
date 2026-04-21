@@ -2,82 +2,166 @@
   "version": 1,
   "author": "Equipe A2 — IPE I — IME 2026.1",
   "editor": "wokwi",
+
+  "$description": "Hercules I — Catapulta BLE. ESP32 + A4988 + NEMA17 + SG90 + endstop NC.",
+  "$signals": {
+    "blue":   "STEP/ADC",
+    "green":  "DIR/Motor",
+    "orange": "ENABLE/Endstop",
+    "purple": "PWM Servo",
+    "yellow": "LED",
+    "red":    "VCC",
+    "black":  "GND"
+  },
+
   "parts": [
+
     {
       "type": "wokwi-esp32-devkit-v1",
-      "id": "esp",
-      "top": 180,
-      "left": 220,
-      "attrs": {}
+      "id":   "esp",
+      "top":  220, "left": 390,
+      "attrs": { "label": "ESP32 — Hercules I" }
     },
+
+    {
+      "type": "wokwi-a4988",
+      "id":   "driver",
+      "top":  100, "left": 200,
+      "attrs": {
+        "label": "A4988 — Driver Motor de Passo"
+      }
+    },
+
     {
       "type": "wokwi-stepper-motor",
-      "id": "motor",
-      "top": 20,
-      "left": 0,
+      "id":   "motor",
+      "top":  0, "left": 0,
       "attrs": {
         "display": "steps",
-        "arrow": "CCW"
+        "arrow":   "CCW",
+        "label":   "NEMA 17 — Tensionamento"
       }
     },
+
     {
       "type": "wokwi-servo",
-      "id": "servo",
-      "top": 20,
-      "left": 500,
+      "id":   "servo",
+      "top":  0, "left": 660,
       "attrs": {
-        "horn": "single"
+        "horn":  "single",
+        "label": "SG90 — Gatilho/Disparo (GPIO 13)"
       }
     },
-    {
-      "type": "wokwi-led",
-      "id": "led_status",
-      "top": 80,
-      "left": 480,
-      "attrs": {
-        "color": "yellow",
-        "label": "STATUS"
-      }
-    },
+
     {
       "type": "wokwi-resistor",
-      "id": "r_led",
-      "top": 110,
-      "left": 450,
+      "id":   "r_servo",
+      "top":  60, "left": 640,
       "attrs": {
-        "value": "220"
+        "value": "220",
+        "label": "R3 220Ω — Proteção GPIO13"
       }
     },
+
+    {
+      "type": "wokwi-led",
+      "id":   "led_status",
+      "top":  120, "left": 680,
+      "attrs": {
+        "color": "yellow",
+        "label": "LED — Status FSM (GPIO 2)"
+      }
+    },
+
+    {
+      "type": "wokwi-resistor",
+      "id":   "r_led",
+      "top":  150, "left": 650,
+      "attrs": {
+        "value": "220",
+        "label": "R4 220Ω — Limitador LED"
+      }
+    },
+
+    {
+      "type": "wokwi-pushbutton",
+      "id":   "endstop",
+      "top":  220, "left": 680,
+      "attrs": {
+        "color": "green",
+        "label": "SW1 — Fim de Curso / Homing (GPIO 25)"
+      }
+    },
+
+    {
+      "type": "wokwi-resistor",
+      "id":   "r_endstop",
+      "top":  270, "left": 650,
+      "attrs": {
+        "value": "10000",
+        "label": "R5 10kΩ — Pullup Endstop"
+      }
+    },
+
     {
       "type": "wokwi-potentiometer",
-      "id": "pot_bat",
-      "top": 380,
-      "left": 480,
+      "id":   "pot_bat",
+      "top":  400, "left": 660,
       "attrs": {
-        "label": "Bateria (GPIO34)"
+        "label": "Bateria — Simula saída divisor R1/R2 (GPIO 34)"
       }
     }
+
   ],
+
   "connections": [
+
     ["esp:TX0", "$serialMonitor:RX", "", []],
     ["esp:RX0", "$serialMonitor:TX", "", []],
-    ["esp:D26",  "motor:A-",  "green",  []],
-    ["esp:D27",  "motor:A+",  "green",  []],
-    ["esp:D14",  "motor:B-",  "green",  []],
-    ["esp:D12",  "motor:B+",  "green",  []],
-    ["esp:D13",  "servo:PWM",   "purple", []],
-    ["esp:5V",   "servo:V+",    "red",    []],
-    ["esp:GND",  "servo:GND",   "black",  []],
-    ["esp:D2",   "r_led:1",     "yellow", []],
-    ["r_led:2",  "led_status:A","yellow", []],
-    ["led_status:K", "esp:GND", "black",  []],
-    ["pot_bat:SIG", "esp:D34",  "blue",   []],
-    ["pot_bat:VCC",  "esp:3V3", "red",    []],
-    ["pot_bat:GND",  "esp:GND", "black",  []]
+
+    ["esp:D26", "driver:STEP",   "blue",   []],
+    ["esp:D27", "driver:DIR",    "green",  []],
+    ["esp:D14", "driver:ENABLE", "orange", []],
+
+    ["esp:3V3", "driver:SLP", "red",   []],
+    ["esp:3V3", "driver:RST", "red",   []],
+    ["esp:GND", "driver:MS1", "black", []],
+    ["esp:GND", "driver:MS2", "black", []],
+    ["esp:GND", "driver:MS3", "black", []],
+
+    ["esp:5V",  "driver:VMOT",  "red",   []],
+    ["esp:GND", "driver:GND.2", "black", []],
+    ["esp:3V3", "driver:VDD",   "red",   []],
+    ["esp:GND", "driver:GND.1", "black", []],
+
+    ["driver:1A", "motor:A+", "green", []],
+    ["driver:1B", "motor:A-", "green", []],
+    ["driver:2A", "motor:B+", "green", []],
+    ["driver:2B", "motor:B-", "green", []],
+
+    ["esp:D13",   "r_servo:1",  "purple", []],
+    ["r_servo:2", "servo:PWM",  "purple", []],
+    ["esp:5V",    "servo:V+",   "red",    []],
+    ["esp:GND",   "servo:GND",  "black",  []],
+
+    ["esp:D2",        "r_led:1",      "yellow", []],
+    ["r_led:2",       "led_status:A", "yellow", []],
+    ["led_status:K",  "esp:GND",      "black",  []],
+
+    ["esp:3V3",     "r_endstop:1", "red",    []],
+    ["r_endstop:2", "esp:D25",     "orange", []],
+    ["esp:D25",     "endstop:1.l", "orange", []],
+    ["endstop:2.l", "esp:GND",     "black",  []],
+
+    ["pot_bat:VCC", "esp:3V3",  "red",   []],
+    ["pot_bat:SIG", "esp:D34",  "blue",  []],
+    ["pot_bat:GND", "esp:GND",  "black", []]
+
   ],
+
   "serialMonitor": {
-    "display": "terminal",
-    "newline": "lf",
+    "display":    "terminal",
+    "newline":    "lf",
     "convertEol": true
   }
 }

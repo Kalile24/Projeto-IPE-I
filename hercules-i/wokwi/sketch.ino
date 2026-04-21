@@ -3,56 +3,61 @@
  * IPE I — Instituto Militar de Engenharia — 2026.1
  *
  * Arquivo: wokwi/sketch.ino
- * Descrição: Versão de simulação do firmware para o Wokwi.
- *            - Motor controlado com steps simplificados (delay + digitalWrite)
- *            - BLE substituído por Serial Monitor (comandos via teclado)
- *            - Todas as transições de estado exibidas via Serial.println
- *            - Permite testar a FSM completa sem hardware real
+ * Versão: 1.1.0 — Abril/2026
  *
- * Como usar no Wokwi:
- *   1. Acesse https://wokwi.com e crie um novo projeto ESP32
- *   2. Copie este arquivo para sketch.ino
- *   3. Copie diagram.json para a aba "Diagram"
- *   4. Crie libraries.txt com a linha: ESP32Servo
- *   5. Clique em "Start Simulation"
- *   6. Abra o Serial Monitor (9600 baud)
- *   7. Digite comandos (SET:1.50, ARM, FIRE, ABORT, STATUS, CAL:1.00:260)
+ * Simulação fiel ao firmware real:
+ *   - Motor controlado via A4988 com AccelStepper no modo DRIVER (STEP/DIR/ENABLE)
+ *   - Pinagem e FSM idênticas ao hercules_firmware.ino
+ *   - Controle não-bloqueante: motor.run() chamado a cada ciclo do loop()
+ *   - Homing via botão Endstop (GPIO 25) — pressione no diagrama quando solicitado
+ *   - BLE substituído por Serial Monitor
  *
- * Autor: Kalile (Gerente / Firmware)
- * Versão: 1.0.0
- * Data: Abril/2026
+ * Diferenças inevitáveis em relação ao hardware real:
+ *   - Sem stack BLE / sem mutex FreeRTOS (Serial é single-task)
+ *   - VMOT do A4988 alimentado pelo 5V do ESP32 (real usa 9V)
+ *   - Potenciômetro substitui o divisor resistivo R1/R2 no GPIO34
  *
- * === PINAGEM WOKWI ========================================================
- *  GPIO 26  → bobina A- do motor virtual
- *  GPIO 27  → bobina A+ do motor virtual
- *  GPIO 14  → bobina B- do motor virtual
- *  GPIO 12  → bobina B+ do motor virtual
- *  GPIO 13  → Servo SG90 (PWM)
- *  GPIO 34  → Potenciômetro (ADC simulando bateria)
+ * Como usar:
+ *   1. Inicie a simulação (F1 → Wokwi: Start Simulator)
+ *   2. Abra o Serial Monitor (9600 baud)
+ *   3. Durante o homing automático, pressione o botão ENDSTOP (verde) no diagrama
+ *   4. Digite comandos: SET:1.50  ARM  FIRE  ABORT  HOME  STATUS  TABELA  CAL:X.XX:NNN
+ *
+ * === PINAGEM — idêntica ao firmware real =====================================
+ *  GPIO 26  → A4988 STEP
+ *  GPIO 27  → A4988 DIR
+ *  GPIO 14  → A4988 ENABLE (ativo em LOW)
+ *  GPIO 13  → Servo SG90 (PWM, via R3 220Ω)
+ *  GPIO 25  → Botão endstop (NC simulado — LOW = home acionado)
+ *  GPIO 34  → Potenciômetro (simula saída do divisor R1/R2 da bateria)
  *  GPIO  2  → LED de status
- * =========================================================================
+ * =============================================================================
  */
 
-// ─── Flag de modo de simulação ────────────────────────────────────────────
-#define SIMULATION_MODE
-
+#include <AccelStepper.h>
 #include <ESP32Servo.h>
 
-// ─── Pinagem ──────────────────────────────────────────────────────────────
-#define PIN_IN1   26    // Motor virtual (bobina A-)
-#define PIN_IN2   27    // Motor virtual (bobina A+)
-#define PIN_IN3   14    // Motor virtual (bobina B-)
-#define PIN_IN4   12    // Motor virtual (bobina B+)
-#define PIN_SERVO 13
-#define PIN_ADC   34
-#define PIN_LED    2
+// ─── Pinagem (idêntica ao firmware real) ─────────────────────────────────
+#define PIN_STEP     26
+#define PIN_DIR      27
+#define PIN_ENABLE   14
+#define PIN_SERVO    13
+#define PIN_ENDSTOP  25
+#define PIN_ADC      34
+#define PIN_LED       2
+
+// ─── Configurações do motor ───────────────────────────────────────────────
+#define MOTOR_MAX_SPEED    500.0f
+#define MOTOR_ACCELERATION 200.0f
+#define HOMING_SPEED       200.0f
+#define HOMING_MAX_STEPS   3000
 
 // ─── Configurações do servo ───────────────────────────────────────────────
-#define SERVO_ARMADO  90
-#define SERVO_FIRE     0
+#define SERVO_ARMADO      90
+#define SERVO_FIRE         0
+#define SERVO_FIRE_DELAY 500
 
-// ─── Tabela de calibração (lookup table) ─────────────────────────────────
-// Índices: distância de 0,50m a 4,00m em passos de 0,25m
+// ─── Tabela de calibração (espelho do lookup_table.h) ────────────────────
 #define TABLE_SIZE   15
 #define DIST_MIN_M   0.50f
 #define DIST_STEP_M  0.25f
@@ -75,131 +80,115 @@ int stepsTabela[TABLE_SIZE] = {
     1485   // 4,00 m
 };
 
-// ─── Estados da FSM ───────────────────────────────────────────────────────
-enum Estado {
-    IDLE,
-    TENSIONING,
-    ARMED,
-    FIRING,
-    RETURNING
-};
-
+// ─── Estados da FSM (idênticos ao firmware real) ──────────────────────────
+enum Estado { IDLE, HOMING, TENSIONING, ARMED, FIRING, RETURNING };
 Estado estadoAtual = IDLE;
 
 // ─── Variáveis de controle ────────────────────────────────────────────────
-float distanciaAlvo   = 1.00f;
-int   passosSelecionados = 255;
-long  posicaoAtual    = 0;       // Posição atual do motor em passos
-int   percentualBat   = 100;
+float         distanciaAlvo      = 1.00f;
+int           passosSelecionados = 255;
+int           percentualBat      = 100;
+unsigned long tempoEntradaARMED  = 0;
+unsigned long tempoDisparo       = 0;
+unsigned long ultimoBlink        = 0;
+bool          estadoLED          = false;
 
-// Temporização
-unsigned long tempoEntradaARMED = 0;
-unsigned long ultimoLED         = 0;
-bool          estadoLED         = false;
+// ─── Hardware ─────────────────────────────────────────────────────────────
+AccelStepper motor(AccelStepper::DRIVER, PIN_STEP, PIN_DIR);
+Servo        servo;
+String       bufferSerial = "";
 
-Servo servo;
+// ─── Funções auxiliares ───────────────────────────────────────────────────
 
-// Buffer de entrada serial
-String bufferSerial = "";
+void habilitarMotor()   { digitalWrite(PIN_ENABLE, LOW);  }
+void desabilitarMotor() { digitalWrite(PIN_ENABLE, HIGH); }
 
-// ─── Sequência de meios passos para o motor virtual do Wokwi ─────────────
-// Tabela de 8 fases (meios passos) para torque suave
-const byte FASES[8][4] = {
-    {1, 0, 0, 0},
-    {1, 1, 0, 0},
-    {0, 1, 0, 0},
-    {0, 1, 1, 0},
-    {0, 0, 1, 0},
-    {0, 0, 1, 1},
-    {0, 0, 0, 1},
-    {1, 0, 0, 1}
-};
-int indiceFase = 0;
-
-// ─── Funções do motor (modo simulação) ────────────────────────────────────
-
-/**
- * Executa um único meio passo no motor.
- * direcao: 1 = para frente (tensionar), -1 = para trás (retornar)
- */
-void passoMotor(int direcao) {
-    indiceFase = (indiceFase + direcao + 8) % 8;
-    digitalWrite(PIN_IN1, FASES[indiceFase][0]);
-    digitalWrite(PIN_IN2, FASES[indiceFase][1]);
-    digitalWrite(PIN_IN3, FASES[indiceFase][2]);
-    digitalWrite(PIN_IN4, FASES[indiceFase][3]);
-    delayMicroseconds(2000);  // ~500 steps/s simulado
-}
-
-/**
- * Desliga todas as bobinas (economiza energia, evita superaquecimento).
- */
-void desligarBobinas() {
-    digitalWrite(PIN_IN1, LOW);
-    digitalWrite(PIN_IN2, LOW);
-    digitalWrite(PIN_IN3, LOW);
-    digitalWrite(PIN_IN4, LOW);
-}
-
-/**
- * Move o motor n passos em uma direção.
- * direcao: 1 = tensionar, -1 = retornar
- */
-void moverMotor(int nPassos, int direcao) {
-    for (int i = 0; i < nPassos; i++) {
-        passoMotor(direcao);
-        if (i % 50 == 0) {
-            Serial.print(".");  // Indicador de progresso
-        }
-    }
-    Serial.println();
-    desligarBobinas();
-}
-
-// ─── Funções auxiliares ────────────────────────────────────────────────────
-
-/**
- * Converte distância em metros para índice na tabela.
- */
 int distanciaParaIndice(float dist) {
     if (dist < DIST_MIN_M || dist > 4.00f) return -1;
-    return (int)round((dist - DIST_MIN_M) / DIST_STEP_M);
+    int idx = (int)round((dist - DIST_MIN_M) / DIST_STEP_M);
+    return (idx >= TABLE_SIZE) ? TABLE_SIZE - 1 : idx;
 }
 
-/**
- * Lê o ADC do potenciômetro e calcula percentual de "bateria".
- */
-void lerBateria() {
-    int adc = analogRead(PIN_ADC);
-    percentualBat = (int)((adc / 4095.0f) * 100.0f);
-}
-
-/**
- * Imprime estado atual da FSM no Serial.
- */
-void printEstado(const char* prefixo) {
-    const char* nomes[] = {"IDLE", "TENSIONING", "ARMED", "FIRING", "RETURNING"};
-    Serial.print("[FSM] ");
-    Serial.print(prefixo);
+void printEstado() {
+    const char* nomes[] = {"IDLE","HOMING","TENSIONING","ARMED","FIRING","RETURNING"};
+    Serial.print("[FSM] → ");
     Serial.println(nomes[estadoAtual]);
 }
 
-/**
- * Executa ABORT: para motor e retorna ao zero.
- */
-void executarAbort() {
-    Serial.println("[ABORT] Retornando ao zero...");
-    if (posicaoAtual > 0) {
-        moverMotor(posicaoAtual, -1);
-        posicaoAtual = 0;
+void atualizarLED() {
+    unsigned long agora = millis();
+    switch (estadoAtual) {
+        case IDLE:
+            if (agora - ultimoBlink >= 500) { estadoLED = !estadoLED; digitalWrite(PIN_LED, estadoLED); ultimoBlink = agora; }
+            break;
+        case HOMING:
+        case TENSIONING:
+            if (agora - ultimoBlink >= 100) { estadoLED = !estadoLED; digitalWrite(PIN_LED, estadoLED); ultimoBlink = agora; }
+            break;
+        case ARMED:
+            digitalWrite(PIN_LED, HIGH);
+            break;
+        case FIRING:
+        case RETURNING:
+            if (agora - ultimoBlink >= 50) { estadoLED = !estadoLED; digitalWrite(PIN_LED, estadoLED); ultimoBlink = agora; }
+            break;
     }
-    servo.write(SERVO_ARMADO);
-    estadoAtual = IDLE;
-    printEstado("→ ");
-    Serial.println("[SIM] Pronto para novo lançamento.");
 }
 
-// ─── Processamento de comandos (via Serial) ────────────────────────────────
+/**
+ * Inicia retorno ao zero (não-bloqueante).
+ * O loop() executa motor.run() e faz a transição para IDLE ao chegar em 0.
+ */
+void iniciarRetorno() {
+    habilitarMotor();
+    motor.moveTo(0);
+    estadoAtual = RETURNING;
+    printEstado();
+    Serial.printf("[SIM] Retornando de %ld para 0 passos...\n", motor.currentPosition());
+}
+
+/**
+ * Homing bloqueante: recua o motor até o botão Endstop ser pressionado.
+ * No Wokwi, pressione o botão VERDE no diagrama durante a sequência.
+ */
+void executarHoming() {
+    estadoAtual = HOMING;
+    printEstado();
+    Serial.println("[HOMING] Recuando — pressione o botão ENDSTOP (verde) no diagrama.");
+
+    if (digitalRead(PIN_ENDSTOP) == LOW) {
+        motor.setCurrentPosition(0);
+        desabilitarMotor();
+        estadoAtual = IDLE;
+        Serial.println("[HOMING] Endstop já acionado — zero confirmado.");
+        printEstado();
+        return;
+    }
+
+    habilitarMotor();
+    motor.setMaxSpeed(HOMING_SPEED);
+    motor.move(-HOMING_MAX_STEPS);
+
+    while (digitalRead(PIN_ENDSTOP) == HIGH && motor.distanceToGo() != 0) {
+        motor.run();
+        atualizarLED();
+    }
+
+    motor.stop();
+    motor.setCurrentPosition(0);
+    motor.setMaxSpeed(MOTOR_MAX_SPEED);
+    desabilitarMotor();
+    estadoAtual = IDLE;
+
+    if (digitalRead(PIN_ENDSTOP) == LOW) {
+        Serial.println("[HOMING] Posição zero estabelecida com sucesso.");
+    } else {
+        Serial.println("[HOMING] AVISO: limite atingido sem detectar endstop. Verifique o botão.");
+    }
+    printEstado();
+}
+
+// ─── Processamento de comandos (via Serial) ───────────────────────────────
 
 void processarComandoSerial(const String& cmd) {
     Serial.println();
@@ -208,85 +197,62 @@ void processarComandoSerial(const String& cmd) {
 
     // SET:X.XX
     if (cmd.startsWith("SET:")) {
-        if (estadoAtual != IDLE) {
-            Serial.println("[ERRO] Sistema ocupado. Envie ABORT primeiro.");
-            return;
-        }
+        if (estadoAtual != IDLE) { Serial.println("[ERRO] Sistema ocupado. Envie ABORT primeiro."); return; }
         float dist = cmd.substring(4).toFloat();
         int idx = distanciaParaIndice(dist);
-        if (idx < 0) {
-            Serial.println("[ERRO] Distância fora do range (0.50 a 4.00 m).");
-            return;
-        }
+        if (idx < 0) { Serial.println("[ERRO] Distância fora do range (0.50 – 4.00 m)."); return; }
         distanciaAlvo      = dist;
         passosSelecionados = stepsTabela[idx];
-        Serial.printf("[OK] Distância: %.2f m → %d passos (índice %d)\n",
-                      dist, passosSelecionados, idx);
+        Serial.printf("[OK] Distância: %.2f m → %d passos (índice %d)\n", dist, passosSelecionados, idx);
         return;
     }
 
-    // ARM
+    // ARM — inicia tensionamento (não-bloqueante)
     if (cmd == "ARM") {
-        if (estadoAtual != IDLE) {
-            Serial.println("[ERRO] Estado inválido para ARM.");
-            return;
-        }
+        if (estadoAtual != IDLE) { Serial.println("[ERRO] Estado inválido para ARM."); return; }
+        habilitarMotor();
+        motor.moveTo(passosSelecionados);
         estadoAtual = TENSIONING;
-        printEstado("→ ");
-        Serial.printf("[SIM] Tensionando: %d passos...\n", passosSelecionados);
-        moverMotor(passosSelecionados, 1);
-        posicaoAtual = passosSelecionados;
-        estadoAtual = ARMED;
-        tempoEntradaARMED = millis();
-        printEstado("→ ");
-        Serial.println("[SIM] Sistema ARMADO. Aguardando FIRE (timeout 30s).");
+        printEstado();
+        Serial.printf("[SIM] Tensionando %d passos... (motor movendo)\n", passosSelecionados);
         return;
     }
 
-    // FIRE
+    // FIRE — libera servo e agenda retorno via timestamp (não-bloqueante)
     if (cmd == "FIRE") {
-        if (estadoAtual != ARMED) {
-            Serial.println("[ERRO] Catapulta não está ARMED. Execute ARM primeiro.");
-            return;
-        }
-        estadoAtual = FIRING;
-        printEstado("→ ");
-        Serial.println("[SIM] DISPARANDO! Servo liberando gatilho...");
+        if (estadoAtual != ARMED) { Serial.println("[ERRO] Catapulta não está ARMED."); return; }
         servo.write(SERVO_FIRE);
-        delay(500);
-        Serial.println("[SIM] DISPARADO!");
-
-        // Retornar ao zero
-        estadoAtual = RETURNING;
-        printEstado("→ ");
-        Serial.printf("[SIM] Retornando: %ld passos...\n", posicaoAtual);
-        moverMotor(posicaoAtual, -1);
-        posicaoAtual = 0;
-
-        // Recolhe servo
-        servo.write(SERVO_ARMADO);
-
-        estadoAtual = IDLE;
-        printEstado("→ ");
-        Serial.println("[SIM] Ciclo completo. Pronto para novo lançamento.");
+        tempoDisparo = millis();
+        estadoAtual  = FIRING;
+        printEstado();
+        Serial.println("[SIM] DISPARANDO — servo liberado.");
         return;
     }
 
     // ABORT
     if (cmd == "ABORT") {
-        executarAbort();
+        Serial.println("[SIM] ABORT solicitado.");
+        iniciarRetorno();
+        return;
+    }
+
+    // HOME
+    if (cmd == "HOME") {
+        if (estadoAtual != IDLE) { Serial.println("[ERRO] Sistema ocupado. Envie ABORT primeiro."); return; }
+        executarHoming();
         return;
     }
 
     // STATUS
     if (cmd == "STATUS") {
-        lerBateria();
-        const char* nomes[] = {"IDLE", "TENSIONING", "ARMED", "FIRING", "RETURNING"};
+        percentualBat = (int)((analogRead(PIN_ADC) / 4095.0f) * 100.0f);
+        const char* nomes[] = {"IDLE","HOMING","TENSIONING","ARMED","FIRING","RETURNING"};
         Serial.println("─────────────────────────────────");
-        Serial.printf("  Estado:    %s\n", nomes[estadoAtual]);
+        Serial.printf("  Estado:    %s\n",   nomes[estadoAtual]);
         Serial.printf("  Distância: %.2f m\n", distanciaAlvo);
-        Serial.printf("  Passos:    %d\n", passosSelecionados);
-        Serial.printf("  Posição:   %ld passos\n", posicaoAtual);
+        Serial.printf("  Passos:    %d\n",   passosSelecionados);
+        Serial.printf("  Posição:   %ld\n",  motor.currentPosition());
+        Serial.printf("  Restante:  %ld\n",  motor.distanceToGo());
         Serial.printf("  Bateria:   %d%%\n", percentualBat);
         Serial.println("─────────────────────────────────");
         return;
@@ -294,29 +260,19 @@ void processarComandoSerial(const String& cmd) {
 
     // CAL:X.XX:NNN
     if (cmd.startsWith("CAL:")) {
-        int p1 = cmd.indexOf(':', 4);
-        if (p1 < 0) {
-            Serial.println("[ERRO] Formato: CAL:X.XX:NNN");
-            return;
-        }
-        float dist = cmd.substring(4, p1).toFloat();
-        int novosPassos = cmd.substring(p1 + 1).toInt();
-        int idx = distanciaParaIndice(dist);
-        if (idx < 0) {
-            Serial.println("[ERRO] Distância inválida.");
-            return;
-        }
-        if (novosPassos <= 0 || novosPassos > 9999) {
-            Serial.println("[ERRO] Passos inválidos (1-9999).");
-            return;
-        }
+        int p = cmd.indexOf(':', 4);
+        if (p < 0) { Serial.println("[ERRO] Formato: CAL:X.XX:NNN"); return; }
+        float dist        = cmd.substring(4, p).toFloat();
+        int   novosPassos = cmd.substring(p + 1).toInt();
+        int   idx         = distanciaParaIndice(dist);
+        if (idx < 0)                                { Serial.println("[ERRO] Distância inválida."); return; }
+        if (novosPassos <= 0 || novosPassos > 9999) { Serial.println("[ERRO] Passos inválidos (1–9999)."); return; }
         stepsTabela[idx] = novosPassos;
-        Serial.printf("[CAL] Atualizado: %.2fm → %d passos (idx %d)\n",
-                      dist, novosPassos, idx);
+        Serial.printf("[CAL] Atualizado: %.2fm → %d passos (idx %d)\n", dist, novosPassos, idx);
         return;
     }
 
-    // TABELA — exibe a lookup table completa
+    // TABELA
     if (cmd == "TABELA") {
         Serial.println("─────────────────────────────────");
         Serial.println("  LOOKUP TABLE ATUAL:");
@@ -328,7 +284,7 @@ void processarComandoSerial(const String& cmd) {
         return;
     }
 
-    Serial.println("[ERRO] Comando desconhecido. Comandos: SET:X.XX ARM FIRE ABORT STATUS CAL:X.XX:NNN TABELA");
+    Serial.println("[ERRO] Comandos: SET:X.XX  ARM  FIRE  ABORT  HOME  STATUS  CAL:X.XX:NNN  TABELA");
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────
@@ -338,38 +294,40 @@ void setup() {
     delay(500);
 
     Serial.println("\n====================================================");
-    Serial.println("  PROJETO HERCULES I — MODO SIMULAÇÃO WOKWI");
+    Serial.println("  HERCULES I — SIMULAÇÃO WOKWI v1.1");
+    Serial.println("  A4988 + AccelStepper (modo DRIVER)");
     Serial.println("  Equipe A2 — IPE I — IME 2026.1");
     Serial.println("====================================================");
     Serial.println("  Comandos disponíveis:");
-    Serial.println("    SET:X.XX  — Define distância (ex: SET:2.00)");
-    Serial.println("    ARM       — Arma a catapulta");
-    Serial.println("    FIRE      — Dispara");
-    Serial.println("    ABORT     — Aborta operação");
-    Serial.println("    STATUS    — Exibe status atual");
-    Serial.println("    CAL:X.XX:N — Calibra distância");
-    Serial.println("    TABELA    — Exibe lookup table completa");
+    Serial.println("    SET:X.XX     — Define distância (ex: SET:2.00)");
+    Serial.println("    ARM          — Arma a catapulta (não-bloqueante)");
+    Serial.println("    FIRE         — Dispara");
+    Serial.println("    ABORT        — Aborta e retorna ao zero");
+    Serial.println("    HOME         — Re-executa homing");
+    Serial.println("    STATUS       — Exibe status atual");
+    Serial.println("    CAL:X.XX:N   — Calibra distância");
+    Serial.println("    TABELA       — Exibe lookup table");
     Serial.println("====================================================\n");
 
-    // Pinos do motor
-    pinMode(PIN_IN1, OUTPUT);
-    pinMode(PIN_IN2, OUTPUT);
-    pinMode(PIN_IN3, OUTPUT);
-    pinMode(PIN_IN4, OUTPUT);
-    desligarBobinas();
-
-    // LED
-    pinMode(PIN_LED, OUTPUT);
+    pinMode(PIN_ENABLE,  OUTPUT);
+    pinMode(PIN_ENDSTOP, INPUT_PULLUP);
+    pinMode(PIN_LED,     OUTPUT);
+    desabilitarMotor();
     digitalWrite(PIN_LED, LOW);
 
-    // Servo
+    motor.setMaxSpeed(MOTOR_MAX_SPEED);
+    motor.setAcceleration(MOTOR_ACCELERATION);
+    motor.setCurrentPosition(0);
+
     servo.attach(PIN_SERVO);
     servo.write(SERVO_ARMADO);
 
-    // ADC
     analogReadResolution(12);
 
-    Serial.println("[INIT] Sistema pronto. Estado: IDLE");
+    // Homing inicial — pressione o botão ENDSTOP quando solicitado
+    executarHoming();
+
+    Serial.println("[INIT] Sistema pronto.");
     Serial.print("> Comando: ");
 }
 
@@ -378,25 +336,43 @@ void setup() {
 void loop() {
     unsigned long agora = millis();
 
-    // ── Timeout automático no estado ARMED (30s) ──────────────────────
-    if (estadoAtual == ARMED) {
-        if (agora - tempoEntradaARMED >= 30000) {
-            Serial.println("\n[TIMEOUT] 30s no estado ARMED — executando ABORT automático.");
-            executarAbort();
+    atualizarLED();
+
+    // Timeout de segurança no estado ARMED (30 s)
+    if (estadoAtual == ARMED && agora - tempoEntradaARMED >= 30000) {
+        Serial.println("\n[TIMEOUT] 30s em ARMED — ABORT automático.");
+        iniciarRetorno();
+    }
+
+    // ── Controle não-bloqueante do motor ──────────────────────────────────
+    if (estadoAtual == TENSIONING || estadoAtual == RETURNING) {
+        if (motor.distanceToGo() != 0) {
+            motor.run();
+        } else {
+            if (estadoAtual == TENSIONING) {
+                // Motor permanece HABILITADO em ARMED (evita deriva pelo elástico)
+                estadoAtual = ARMED;
+                tempoEntradaARMED = agora;
+                printEstado();
+                Serial.println("[SIM] ARMADO — aguardando FIRE (timeout 30 s).");
+            } else {  // RETURNING
+                desabilitarMotor();
+                servo.write(SERVO_ARMADO);
+                estadoAtual = IDLE;
+                printEstado();
+                Serial.println("[SIM] Ciclo completo. Pronto para novo lançamento.");
+                Serial.print("> Comando: ");
+            }
         }
     }
 
-    // ── LED de status ─────────────────────────────────────────────────
-    unsigned long periodLED = (estadoAtual == IDLE) ? 500 : 100;
-    if (estadoAtual == ARMED) {
-        digitalWrite(PIN_LED, HIGH);
-    } else if (agora - ultimoLED >= periodLED) {
-        estadoLED = !estadoLED;
-        digitalWrite(PIN_LED, estadoLED ? HIGH : LOW);
-        ultimoLED = agora;
+    // ── Delay não-bloqueante do FIRING ────────────────────────────────────
+    if (estadoAtual == FIRING && agora - tempoDisparo >= SERVO_FIRE_DELAY) {
+        Serial.println("[SIM] DISPARADO!");
+        iniciarRetorno();
     }
 
-    // ── Leitura de comandos via Serial ────────────────────────────────
+    // ── Leitura de comandos via Serial ────────────────────────────────────
     while (Serial.available()) {
         char c = Serial.read();
         if (c == '\n' || c == '\r') {
@@ -404,11 +380,11 @@ void loop() {
                 bufferSerial.trim();
                 processarComandoSerial(bufferSerial);
                 bufferSerial = "";
-                Serial.print("\n> Comando: ");
+                if (estadoAtual == IDLE) Serial.print("\n> Comando: ");
             }
         } else {
             bufferSerial += c;
-            Serial.print(c);  // Eco local
+            Serial.print(c);
         }
     }
 }
