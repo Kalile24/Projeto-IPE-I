@@ -504,7 +504,7 @@
                 <field name="INSTANCE_NAME">LabelEstado</field><field name="PROP">Text</field>
                 <value name="VALUE"><block type="variables_get"><field name="VAR">estado</field></block></value>
               </block>
-              <!-- Atualiza bateria se mensagem contiver BAT: -->
+              <!-- Compatibilidade opcional: se firmware antigo enviar BAT:, mostra no aviso. -->
               <block type="controls_if">
                 <value name="IF0">
                   <block type="text_contains">
@@ -515,12 +515,12 @@
                 </value>
                 <statement name="DO0">
                   <block type="component_set_get">
-                    <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelBat"></mutation>
-                    <field name="INSTANCE_NAME">LabelBat</field><field name="PROP">Text</field>
+                    <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelAviso"></mutation>
+                    <field name="INSTANCE_NAME">LabelAviso</field><field name="PROP">Text</field>
                     <value name="VALUE">
                       <block type="text_join">
                         <mutation items="2"></mutation>
-                        <value name="ADD0"><block type="text"><field name="TEXT">Bateria: </field></block></value>
+                        <value name="ADD0"><block type="text"><field name="TEXT">Aviso: bateria </field></block></value>
                         <value name="ADD1">
                           <block type="text_segment">
                             <value name="TEXT"><block type="variables_get"><field name="VAR">estado</field></block></value>

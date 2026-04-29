@@ -4,7 +4,7 @@
  *
  * COMO ATUALIZAR:
  *   Script (recomendado): python calibration/calibrar.py --input dados.csv --output lookup_table.h
- *   Em campo (sem recompilar): envie BLE "CAL:X.XX:NNN" (atualiza RAM até reiniciar)
+ *   Em campo (sem recompilar): envie "CAL:X.XX:NNN" por Serial ou Bluetooth
  *   Manual: edite STEPS_TABLE[] abaixo e recompile
  *
  * Índice 0 = 0,50 m | Índice 14 = 4,00 m | Passo = 0,25 m por índice

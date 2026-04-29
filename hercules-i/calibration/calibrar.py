@@ -247,6 +247,9 @@ def gerar_header_cpp(tabela, caminho_saida):
  * Gerado em: {agora}
  * Script:    calibrar.py v1.0.0
  *
+ * Em campo: envie CAL:X.XX:N por Serial ou Bluetooth para testar
+ * novos valores na RAM antes de gravar esta tabela no firmware.
+ *
  * Tabela de calibração:
 {tabela_comentario} */
 
