@@ -107,22 +107,35 @@ Bibliotecas necessárias (instalar pelo Library Manager):
 
 ---
 
-## App mobile
+## App mobile (MIT App Inventor — Android)
 
-```bash
-cd app/hercules-app
-npm install
-npx expo start
+O arquivo `app/HerculesI.aia` é o projeto pronto para importar no MIT App Inventor.
+
+### Como instalar
+
+1. Acesse [ai2.appinventor.mit.edu](https://ai2.appinventor.mit.edu)
+2. **Projects → Import project (.aia)** → selecione `app/HerculesI.aia`
+3. **Build → Android App (.apk)** → instale no celular
+
+> Alternativa mais rápida: conecte o celular pelo **MIT AI2 Companion** (Play Store) e clique **Connect → AI Companion** no site — testa sem precisar gerar o APK.
+
+### Dependência: extensão BLE
+
+O app usa a extensão oficial de Bluetooth LE do MIT. Ela já está referenciada no projeto — ao importar o `.aia`, o App Inventor pode pedir para baixá-la automaticamente. Se não baixar:
+
+1. No App Inventor: **Extensions → Import extension**
+2. URL: `https://mit-cml.github.io/extensions/data/extensions/edu.mit.appinventor.ble.aix`
+
+### Fluxo de uso
+
+```
+1. Abra o app → toque CONECTAR → aguarda encontrar "Hercules-I"
+2. Ajuste a distância (slider ou botões 0.5 / 1.0 / 2.0 / 3.0 / 4.0 m)
+3. Toque LANÇAR → catapulta tensiona e dispara automaticamente
+4. ABORTAR a qualquer momento devolve ao zero
 ```
 
-Escaneie o QR com o **Expo Go** (Android ou iOS).
-
-**Fluxo de uso:**
-1. Tela *Scan* → encontre "Hercules-I" → conecte
-2. Ajuste a distância no slider ou nos botões rápidos
-3. **PREPARAR** → aguarda o motor tensionar
-4. **DISPARAR** → confirme no popup → disparo executado
-5. **ABORTAR** a qualquer momento devolve ao zero
+O estado atual (TENSIONING, ARMED, FIRING…) aparece em tempo real na tela. A bateria é atualizada a cada 5 segundos.
 
 ---
 

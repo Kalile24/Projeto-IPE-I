@@ -106,6 +106,7 @@ float distanciaAlvo_m    = 1.00f;
 int   passosSelecionados = 255;
 
 volatile bool abortSolicitado = false;  // Sinaliza abort da task BLE para o loop
+bool          autoDisparar   = false;   // LAUNCH: dispara automaticamente ao atingir ARMED
 
 unsigned long tempoDisparo      = 0;
 unsigned long tempoEntradaARMED = 0;
@@ -321,6 +322,23 @@ void processarComando(const String& cmd) {
         return;
     }
 
+    // LAUNCH:X.XX — sequência completa: define distância, tensiona e dispara automaticamente
+    if (cmd.startsWith("LAUNCH:")) {
+        if (estadoAtual != IDLE) { enviarStatus("ERROR:BUSY"); return; }
+        float dist = cmd.substring(7).toFloat();
+        int idx = distanciaParaIndice(dist);
+        if (idx < 0) { enviarStatus("ERROR:DIST_INVALIDA"); return; }
+        distanciaAlvo_m    = dist;
+        passosSelecionados = stepsRAM[idx];
+        autoDisparar = true;
+        habilitarMotorT();
+        motorTensao.moveTo(passosSelecionados);
+        estadoAtual = TENSIONING;
+        enviarStatus("LAUNCH:" + String(dist, 2) + "m");
+        Serial.printf("[FSM] LAUNCH %.2fm → %d passos (auto-disparo)\n", dist, passosSelecionados);
+        return;
+    }
+
     // ARM — tensiona o elástico (não-bloqueante)
     if (cmd == "ARM") {
         if (estadoAtual != IDLE) { enviarStatus("ERROR:ESTADO_INVALIDO"); return; }
@@ -344,8 +362,8 @@ void processarComando(const String& cmd) {
 
     // ABORT — para tudo e retorna ao zero
     if (cmd == "ABORT") {
+        autoDisparar = false;
         enviarStatus("ABORT:OK");
-        // Reseta motor de disparo antes de retornar
         motorDisparo.stop();
         motorDisparo.setCurrentPosition(0);
         desabilitarMotorD();
@@ -485,7 +503,16 @@ void loop() {
                 estadoAtual = ARMED;
                 tempoEntradaARMED = agora;
                 enviarStatus("ARMED");
-                Serial.println("[FSM] ARMED — aguardando FIRE.");
+                Serial.println("[FSM] ARMED.");
+                // LAUNCH: dispara imediatamente sem esperar comando FIRE
+                if (autoDisparar) {
+                    autoDisparar = false;
+                    habilitarMotorD();
+                    motorDisparo.move(DISPARO_PASSOS);
+                    tempoDisparo = agora;
+                    estadoAtual  = FIRING;
+                    Serial.println("[FSM] FIRING — disparo automático.");
+                }
             } else {
                 desabilitarMotorT();
                 estadoAtual = IDLE;

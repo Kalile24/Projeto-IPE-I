@@ -16,9 +16,10 @@
  *   LED status:           GPIO  2
  *
  * COMANDOS DISPONÍVEIS:
+ *   LAUNCH:X.XX  Sequência completa: tensiona e dispara automaticamente
  *   SET:X.XX     Define distância (ex: SET:1.50)
  *   ARM          Arma a catapulta
- *   FIRE         Dispara
+ *   FIRE         Dispara (requer ARM antes)
  *   ABORT        Aborta e retorna ao zero
  *   HOME         Homing — pressione o botão ENDSTOP durante a sequência
  *   STATUS       Exibe estado, posição e bateria
@@ -93,6 +94,7 @@ unsigned long tempoDisparo       = 0;
 unsigned long ultimoBlink        = 0;
 bool          estadoLED          = false;
 bool          disparoCompleto    = false;
+bool          autoDisparar      = false;
 
 // ─── Hardware ─────────────────────────────────────────────────────────────────
 AccelStepper motorTensao(AccelStepper::DRIVER,  PIN_T_STEP, PIN_T_DIR);
@@ -222,6 +224,23 @@ void processarComando(const String& cmd) {
         return;
     }
 
+    // LAUNCH:X.XX — sequência completa automática
+    if (cmd.startsWith("LAUNCH:")) {
+        if (estadoAtual != IDLE) { Serial.println("[ERRO] Sistema ocupado. Envie ABORT primeiro."); return; }
+        float dist = cmd.substring(7).toFloat();
+        int idx = distanciaParaIndice(dist);
+        if (idx < 0) { Serial.println("[ERRO] Distância fora do range (0.50 – 4.00 m)."); return; }
+        distanciaAlvo      = dist;
+        passosSelecionados = stepsTabela[idx];
+        autoDisparar = true;
+        habilitarMotorT();
+        motorTensao.moveTo(passosSelecionados);
+        estadoAtual = TENSIONING;
+        printEstado();
+        Serial.printf("[SIM] LAUNCH %.2fm → %d passos (auto-disparo)\n", dist, passosSelecionados);
+        return;
+    }
+
     // ARM
     if (cmd == "ARM") {
         if (estadoAtual != IDLE) { Serial.println("[ERRO] Estado inválido para ARM."); return; }
@@ -248,6 +267,7 @@ void processarComando(const String& cmd) {
 
     // ABORT
     if (cmd == "ABORT") {
+        autoDisparar = false;
         Serial.println("[SIM] ABORT solicitado.");
         motorDisparo.stop();
         motorDisparo.setCurrentPosition(0);
@@ -316,7 +336,7 @@ void setup() {
     Serial.println("  HERCULES I — SIMULAÇÃO WOKWI v1.2");
     Serial.println("  2× A4988 + AccelStepper | Equipe A2 / IME 2026.1");
     Serial.println("====================================================");
-    Serial.println("  SET:X.XX  ARM  FIRE  ABORT  HOME  STATUS  TABELA");
+    Serial.println("  LAUNCH:X.XX  SET:X.XX  ARM  FIRE  ABORT  HOME  STATUS  TABELA");
     Serial.println("====================================================\n");
 
     pinMode(PIN_T_ENABLE, OUTPUT);
@@ -369,7 +389,17 @@ void loop() {
                 estadoAtual = ARMED;
                 tempoEntradaARMED = agora;
                 printEstado();
-                Serial.println("[SIM] ARMADO — aguardando FIRE (timeout 30s).");
+                Serial.println("[SIM] ARMADO.");
+                if (autoDisparar) {
+                    autoDisparar = false;
+                    habilitarMotorD();
+                    motorDisparo.move(DISPARO_PASSOS);
+                    tempoDisparo    = agora;
+                    disparoCompleto = false;
+                    estadoAtual     = FIRING;
+                    printEstado();
+                    Serial.println("[SIM] Disparo automático acionado.");
+                }
             } else {
                 desabilitarMotorT();
                 estadoAtual = IDLE;
