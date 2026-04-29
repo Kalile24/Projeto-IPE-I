@@ -54,7 +54,7 @@ int stepsTabela[TABLE_SIZE] = {
     1485   // 4,00 m
 };
 
-enum Estado { IDLE, TENSIONING, ARMED, FIRING, RETURNING };
+enum Estado { IDLE, TENSIONING, RETURNING, ARMED, FIRING };
 Estado estadoAtual = IDLE;
 
 float distanciaAlvo = 1.00f;
@@ -62,6 +62,8 @@ int passosSelecionados = 255;
 bool autoDisparar = false;
 bool retornoDisparoIniciado = false;
 bool estadoLED = false;
+bool armarAposRetorno = false;
+bool timeoutArmadoAvisado = false;
 
 unsigned long tempoEntradaARMED = 0;
 unsigned long tempoDisparo = 0;
@@ -86,7 +88,7 @@ long posicaoLogicaDisparo() {
 }
 
 const char* nomeEstado() {
-    static const char* nomes[] = {"IDLE", "TENSIONING", "ARMED", "FIRING", "RETURNING"};
+    static const char* nomes[] = {"IDLE", "TENSIONING", "RETURNING", "ARMED", "FIRING"};
     return nomes[estadoAtual];
 }
 
@@ -128,7 +130,8 @@ void desenergizarMotores() {
     motorDisparo.disableOutputs();
 }
 
-void iniciarRetorno() {
+void iniciarRetornoTensionamento(bool prepararDisparo) {
+    armarAposRetorno = prepararDisparo;
     motorTensao.enableOutputs();
     motorTensao.moveTo(alvoFisicoWokwi(0));
     estadoAtual = RETURNING;
@@ -143,6 +146,8 @@ void zerarPosicaoManual() {
     motorDisparo.setCurrentPosition(alvoFisicoWokwi(0));
     autoDisparar = false;
     retornoDisparoIniciado = false;
+    armarAposRetorno = false;
+    timeoutArmadoAvisado = false;
     estadoAtual = IDLE;
     desenergizarMotores();
     Serial.println("[OK] HOME manual: posicoes zeradas. Garanta que o mecanismo esteja no zero fisico.");
@@ -210,11 +215,21 @@ void processarComando(const String& cmd) {
 
     if (cmd == "ABORT") {
         autoDisparar = false;
+        armarAposRetorno = false;
+        timeoutArmadoAvisado = false;
+        if (estadoAtual == ARMED) {
+            Serial.println("[SIM] ABORT: sistema travado pela engrenagem. Use FIRE ou libere manualmente.");
+            return;
+        }
+        if (estadoAtual == FIRING) {
+            Serial.println("[SIM] ABORT: disparo ja liberado; aguardando motor 2 voltar ao zero.");
+            return;
+        }
         retornoDisparoIniciado = false;
         motorDisparo.stop();
         motorDisparo.moveTo(alvoFisicoWokwi(0));
         Serial.println("[SIM] ABORT solicitado.");
-        iniciarRetorno();
+        iniciarRetornoTensionamento(false);
         return;
     }
 
@@ -293,29 +308,39 @@ void loop() {
     atualizarLED();
 
     if (estadoAtual == ARMED && agora - tempoEntradaARMED >= ARMED_TIMEOUT_MS) {
-        Serial.println("\n[TIMEOUT] 30s em ARMED - retorno automatico.");
-        autoDisparar = false;
-        iniciarRetorno();
+        if (!timeoutArmadoAvisado) {
+            Serial.println("\n[TIMEOUT] 30s em ARMED - sistema segue travado pela engrenagem.");
+            Serial.println("[SIM] Use FIRE ou libere manualmente.");
+            timeoutArmadoAvisado = true;
+        }
     }
 
     if (estadoAtual == TENSIONING || estadoAtual == RETURNING) {
         if (motorTensao.distanceToGo() != 0) {
             motorTensao.run();
         } else if (estadoAtual == TENSIONING) {
-            estadoAtual = ARMED;
-            tempoEntradaARMED = agora;
             printEstado();
-            Serial.println("[SIM] ARMADO.");
-            if (autoDisparar) {
-                autoDisparar = false;
-                iniciarDisparo();
-            }
+            Serial.println("[SIM] TRAVADO pela engrenagem. Retornando motor de tensionamento ao zero.");
+            iniciarRetornoTensionamento(true);
         } else {
             motorTensao.disableOutputs();
-            estadoAtual = IDLE;
-            printEstado();
-            Serial.println("[SIM] Ciclo completo. Pronto para novo lancamento.");
-            Serial.print("\n> ");
+            if (armarAposRetorno) {
+                armarAposRetorno = false;
+                estadoAtual = ARMED;
+                tempoEntradaARMED = agora;
+                timeoutArmadoAvisado = false;
+                printEstado();
+                Serial.println("[SIM] ARMADO: tensionamento voltou a zero e a engrenagem segura a carga.");
+                if (autoDisparar) {
+                    autoDisparar = false;
+                    iniciarDisparo();
+                }
+            } else {
+                estadoAtual = IDLE;
+                printEstado();
+                Serial.println("[SIM] Retorno concluido. Pronto para novo comando.");
+                Serial.print("\n> ");
+            }
         }
     }
 
@@ -329,8 +354,9 @@ void loop() {
             }
         } else {
             motorDisparo.disableOutputs();
-            Serial.println("[SIM] DISPARADO! Iniciando retorno do tensionamento.");
-            iniciarRetorno();
+            estadoAtual = IDLE;
+            Serial.println("[SIM] DISPARADO! Motor de disparo voltou ao zero. Ciclo completo.");
+            Serial.print("\n> ");
         }
     }
 

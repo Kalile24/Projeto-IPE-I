@@ -49,7 +49,7 @@
 #define LED_LENTO        1000
 #define LED_RAPIDO        200
 
-enum Estado { IDLE, TENSIONING, ARMED, FIRING, RETURNING };
+enum Estado { IDLE, TENSIONING, RETURNING, ARMED, FIRING };
 Estado estadoAtual = IDLE;
 
 int stepsRAM[TABLE_SIZE];
@@ -62,6 +62,8 @@ unsigned long tempoEntradaARMED = 0;
 unsigned long ultimoBlink = 0;
 bool estadoLED = false;
 bool retornoDisparoIniciado = false;
+bool armarAposRetorno = false;
+bool timeoutArmadoAvisado = false;
 
 BluetoothSerial BT;
 
@@ -83,7 +85,7 @@ void desenergizarMotores() {
 }
 
 const char* nomeEstado() {
-    static const char* nomes[] = {"IDLE", "TENSIONING", "ARMED", "FIRING", "RETURNING"};
+    static const char* nomes[] = {"IDLE", "TENSIONING", "RETURNING", "ARMED", "FIRING"};
     return nomes[estadoAtual];
 }
 
@@ -113,12 +115,18 @@ void atualizarLED() {
                 ultimoBlink = agora;
             }
             break;
+        case RETURNING:
+            if (agora - ultimoBlink >= 50) {
+                estadoLED = !estadoLED;
+                digitalWrite(PIN_LED, estadoLED);
+                ultimoBlink = agora;
+            }
+            break;
         case ARMED:
             digitalWrite(PIN_LED, HIGH);
             estadoLED = true;
             break;
         case FIRING:
-        case RETURNING:
             if (agora - ultimoBlink >= 50) {
                 estadoLED = !estadoLED;
                 digitalWrite(PIN_LED, estadoLED);
@@ -128,7 +136,8 @@ void atualizarLED() {
     }
 }
 
-void iniciarRetorno() {
+void iniciarRetornoTensionamento(bool prepararDisparo) {
+    armarAposRetorno = prepararDisparo;
     motorTensao.enableOutputs();
     motorTensao.moveTo(0);
     estadoAtual = RETURNING;
@@ -141,6 +150,8 @@ void zerarPosicaoManual() {
     motorDisparo.setCurrentPosition(0);
     autoDisparar = false;
     retornoDisparoIniciado = false;
+    armarAposRetorno = false;
+    timeoutArmadoAvisado = false;
     estadoAtual = IDLE;
     desenergizarMotores();
     enviarStatus("HOME_OK:ZERO_MANUAL");
@@ -202,10 +213,21 @@ void processarComando(const String& cmd) {
 
     if (cmd == "ABORT") {
         autoDisparar = false;
+        armarAposRetorno = false;
+        timeoutArmadoAvisado = false;
+        if (estadoAtual == ARMED) {
+            enviarStatus("ABORT:LOCKED");
+            enviarStatus("USE_FIRE_OR_MANUAL_RELEASE");
+            return;
+        }
+        if (estadoAtual == FIRING) {
+            enviarStatus("ABORT:FIRING_ALREADY_RELEASED");
+            return;
+        }
         retornoDisparoIniciado = false;
         motorDisparo.stop();
         motorDisparo.moveTo(0);
-        iniciarRetorno();
+        iniciarRetornoTensionamento(false);
         enviarStatus("ABORT:OK");
         enviarStatus("RETURNING");
         return;
@@ -275,29 +297,38 @@ void loop() {
     atualizarLED();
 
     if (estadoAtual == ARMED && agora - tempoEntradaARMED >= ARMED_TIMEOUT_MS) {
-        Serial.println("[FSM] Timeout ARMED - retorno automatico.");
-        autoDisparar = false;
-        iniciarRetorno();
-        enviarStatus("ABORT:TIMEOUT");
-        enviarStatus("RETURNING");
+        if (!timeoutArmadoAvisado) {
+            Serial.println("[FSM] Timeout ARMED - sistema segue travado mecanicamente.");
+            enviarStatus("ARMED_TIMEOUT:LOCKED");
+            enviarStatus("USE_FIRE_OR_MANUAL_RELEASE");
+            timeoutArmadoAvisado = true;
+        }
     }
 
     if (estadoAtual == TENSIONING || estadoAtual == RETURNING) {
         if (motorTensao.distanceToGo() != 0) {
             motorTensao.run();
         } else if (estadoAtual == TENSIONING) {
-            estadoAtual = ARMED;
-            tempoEntradaARMED = agora;
-            enviarStatus("ARMED");
-            if (autoDisparar) {
-                autoDisparar = false;
-                iniciarDisparo();
-                enviarStatus("FIRING");
-            }
+            enviarStatus("LOCKED");
+            iniciarRetornoTensionamento(true);
+            enviarStatus("RETURNING");
         } else {
             motorTensao.disableOutputs();
-            estadoAtual = IDLE;
-            enviarStatus("IDLE");
+            if (armarAposRetorno) {
+                armarAposRetorno = false;
+                estadoAtual = ARMED;
+                tempoEntradaARMED = agora;
+                timeoutArmadoAvisado = false;
+                enviarStatus("ARMED");
+                if (autoDisparar) {
+                    autoDisparar = false;
+                    iniciarDisparo();
+                    enviarStatus("FIRING");
+                }
+            } else {
+                estadoAtual = IDLE;
+                enviarStatus("IDLE");
+            }
         }
     }
 
@@ -312,8 +343,8 @@ void loop() {
         } else {
             motorDisparo.disableOutputs();
             enviarStatus("FIRED");
-            iniciarRetorno();
-            enviarStatus("RETURNING");
+            estadoAtual = IDLE;
+            enviarStatus("IDLE");
         }
     }
 

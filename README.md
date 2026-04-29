@@ -51,10 +51,10 @@ Pinagem padrao:
 | `HOME` | Zera manualmente a posicao atual |
 | `STATUS` | Mostra estado, distancia e posicoes dos motores |
 | `SET:X.XX` | Define distancia sem armar |
-| `ARM` | Tensiona ate a distancia definida |
+| `ARM` | Tensiona, trava mecanicamente e retorna o motor 1 ao zero |
 | `FIRE` | Dispara quando estiver armado |
-| `LAUNCH:X.XX` | Tensiona e dispara automaticamente |
-| `ABORT` | Cancela e retorna o tensionamento ao zero |
+| `LAUNCH:X.XX` | Executa o ciclo completo: tensiona, retorna motor 1, libera trava |
+| `ABORT` | Cancela antes da trava; se estiver `ARMED`, exige `FIRE` ou liberacao manual |
 | `CAL:X.XX:N` | Testa novos passos para uma distancia ate reiniciar |
 
 ---

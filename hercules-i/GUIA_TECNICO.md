@@ -23,7 +23,10 @@ Fluxo normal:
 2. Ligue o ESP32 e os drivers.
 3. Envie `HOME` para zerar a posicao atual no firmware.
 4. Envie `LAUNCH:1.50` ou use o app.
-5. O motor tensiona, o motor de disparo aciona o gatilho, e o tensionamento retorna para zero por contagem de passos.
+5. O motor 1 tensiona ate a posicao calibrada.
+6. A engrenagem/trava mecanica segura a carga.
+7. O motor 1 retorna ao zero sem soltar a carga.
+8. O motor 2 libera a engrenagem/trava e completa o disparo.
 
 ---
 
@@ -136,10 +139,10 @@ Estados:
 | Estado | Significado |
 |---|---|
 | `IDLE` | Pronto para comando |
-| `TENSIONING` | Motor de tensionamento indo ate a posicao |
-| `ARMED` | Elastico tensionado, aguardando disparo ou auto-disparo |
-| `FIRING` | Motor de disparo acionando e retornando |
-| `RETURNING` | Tensionamento voltando para zero |
+| `TENSIONING` | Motor 1 indo ate a posicao de tensionamento |
+| `RETURNING` | Motor 1 voltando ao zero enquanto a engrenagem segura a carga |
+| `ARMED` | Sistema travado mecanicamente, pronto para o motor 2 liberar |
+| `FIRING` | Motor 2 liberando a engrenagem/trava e retornando ao zero |
 
 Comandos:
 
@@ -148,10 +151,10 @@ Comandos:
 | `HOME` | `HOME` | Zera manualmente a posicao atual |
 | `STATUS` | `STATUS` | Retorna estado e posicoes |
 | `SET:X.XX` | `SET:1.50` | Seleciona distancia |
-| `ARM` | `ARM` | Tensiona sem disparar |
-| `FIRE` | `FIRE` | Dispara se estiver armado |
-| `LAUNCH:X.XX` | `LAUNCH:1.50` | Tensiona e dispara |
-| `ABORT` | `ABORT` | Cancela e retorna |
+| `ARM` | `ARM` | Tensiona, trava e retorna o motor 1 ao zero |
+| `FIRE` | `FIRE` | Libera a trava com o motor 2 se estiver armado |
+| `LAUNCH:X.XX` | `LAUNCH:1.50` | Faz o ciclo completo automaticamente |
+| `ABORT` | `ABORT` | Cancela se ainda nao estiver travado; se `ARMED`, exige `FIRE` ou liberacao manual |
 | `CAL:X.XX:N` | `CAL:1.50:410` | Ajusta passos em RAM |
 
 Formato atual de `STATUS`:
@@ -184,10 +187,11 @@ A tabela `lookup_table.h` ainda e placeholder. Ela precisa ser calibrada com a m
 Fluxo recomendado:
 
 1. Coloque o mecanismo no zero e envie `HOME`.
-2. Teste uma distancia, por exemplo `LAUNCH:1.50`.
+2. Teste uma distancia, por exemplo `ARM`, e confirme que o motor 1 tensiona e volta ao zero.
 3. Meça a distancia real.
-4. Teste novos passos com `CAL:1.50:N`.
-5. Quando estiver bom, registre os dados no CSV e gere novo `lookup_table.h`.
+4. Envie `FIRE` para liberar a trava.
+5. Teste novos passos com `CAL:1.50:N`.
+6. Quando estiver bom, registre os dados no CSV e gere novo `lookup_table.h`.
 
 Comando:
 
@@ -279,7 +283,9 @@ ABORT
 | Motor nao gira | GND nao comum ou VCC ausente no ULN2003 | Confira GND comum e 4xAA |
 | Motor vibra sem girar | Ordem IN1-IN4 incorreta | Troque ordem dos fios ou ajuste construtor |
 | Alcance varia muito | Pilhas fracas ou perda de passos | Troque pilhas, zere manualmente e recalibre |
+| Motor 1 tensiona mas nao volta antes do disparo | Firmware/binario antigo no ESP32 ou Wokwi | Recompile e carregue a versao atual |
 | Retorno nao chega no zero fisico | Perda de passos acumulada | Reposicione manualmente e envie `HOME` |
+| `ABORT` nao solta quando esta `ARMED` | A carga esta travada mecanicamente | Use `FIRE` ou libere manualmente com seguranca |
 | App conecta mas nao controla | Bluetooth pareado errado ou comando sem newline | Repareie `Hercules-I` e teste pelo Serial |
 | Disparo nao libera gatilho | `DISPARO_PASSOS` baixo | Aumente `DISPARO_PASSOS` aos poucos |
 
