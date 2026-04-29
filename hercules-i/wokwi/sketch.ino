@@ -1,24 +1,21 @@
 /**
- * Hercules I - Simulacao Wokwi v2.0.0
+ * Hercules I - Simulacao Wokwi v2.1.0
  * Equipe A2 / IPE I / IME 2026.1
  *
- * Simula a logica do firmware real para dois motores 28BYJ-48.
- * No hardware real, cada motor deve ser ligado a um driver ULN2003.
- * No Wokwi, os fios aparecem diretamente no motor de passo para validar
- * comandos, estados e contagem de passos.
+ * ATENCAO:
+ *   O firmware real usa 28BYJ-48 + ULN2003 em 4 fios.
+ *   Esta simulacao usa drivers STEP/DIR apenas como adaptador visual do Wokwi,
+ *   porque o componente visual de motor de passo volta ao zero corretamente
+ *   nesse modo. A FSM e o protocolo de comandos sao os mesmos do firmware real.
  */
 
 #include <AccelStepper.h>
 
-#define PIN_T_IN1 26
-#define PIN_T_IN2 27
-#define PIN_T_IN3 14
-#define PIN_T_IN4 25
-
-#define PIN_D_IN1 18
-#define PIN_D_IN2 19
-#define PIN_D_IN3 21
-#define PIN_D_IN4 22
+// Pinos STEP/DIR usados somente na simulacao visual Wokwi.
+#define PIN_T_STEP 26
+#define PIN_T_DIR  27
+#define PIN_D_STEP 18
+#define PIN_D_DIR  19
 
 #define PIN_LED 2
 
@@ -61,31 +58,17 @@ float distanciaAlvo = 1.00f;
 int passosSelecionados = 255;
 bool autoDisparar = false;
 bool retornoDisparoIniciado = false;
-bool estadoLED = false;
 bool armarAposRetorno = false;
 bool timeoutArmadoAvisado = false;
+bool estadoLED = false;
 
 unsigned long tempoEntradaARMED = 0;
 unsigned long tempoDisparo = 0;
 unsigned long ultimoBlink = 0;
 
-// No Wokwi, FULL4WIRE faz o display "steps" bater 1:1 com os passos logicos.
-// O sinal e invertido porque a ordem visual das bobinas gira no sentido oposto.
-AccelStepper motorTensao(AccelStepper::FULL4WIRE, PIN_T_IN1, PIN_T_IN3, PIN_T_IN2, PIN_T_IN4);
-AccelStepper motorDisparo(AccelStepper::FULL4WIRE, PIN_D_IN1, PIN_D_IN3, PIN_D_IN2, PIN_D_IN4);
+AccelStepper motorTensao(AccelStepper::DRIVER, PIN_T_STEP, PIN_T_DIR);
+AccelStepper motorDisparo(AccelStepper::DRIVER, PIN_D_STEP, PIN_D_DIR);
 String bufferSerial = "";
-
-long alvoFisicoWokwi(long passosLogicos) {
-    return -passosLogicos;
-}
-
-long posicaoLogicaTensao() {
-    return -motorTensao.currentPosition();
-}
-
-long posicaoLogicaDisparo() {
-    return -motorDisparo.currentPosition();
-}
 
 const char* nomeEstado() {
     static const char* nomes[] = {"IDLE", "TENSIONING", "RETURNING", "ARMED", "FIRING"};
@@ -133,17 +116,17 @@ void desenergizarMotores() {
 void iniciarRetornoTensionamento(bool prepararDisparo) {
     armarAposRetorno = prepararDisparo;
     motorTensao.enableOutputs();
-    motorTensao.moveTo(alvoFisicoWokwi(0));
+    motorTensao.moveTo(0);
     estadoAtual = RETURNING;
     printEstado();
-    Serial.printf("[SIM] Retornando tensionamento para zero. Posicao logica atual: %ld\n", posicaoLogicaTensao());
+    Serial.printf("[SIM] Retornando motor 1 para zero. Posicao atual: %ld\n", motorTensao.currentPosition());
 }
 
 void zerarPosicaoManual() {
     motorTensao.stop();
     motorDisparo.stop();
-    motorTensao.setCurrentPosition(alvoFisicoWokwi(0));
-    motorDisparo.setCurrentPosition(alvoFisicoWokwi(0));
+    motorTensao.setCurrentPosition(0);
+    motorDisparo.setCurrentPosition(0);
     autoDisparar = false;
     retornoDisparoIniciado = false;
     armarAposRetorno = false;
@@ -156,13 +139,13 @@ void zerarPosicaoManual() {
 
 void iniciarDisparo() {
     motorDisparo.enableOutputs();
-    motorDisparo.setCurrentPosition(alvoFisicoWokwi(0));
-    motorDisparo.moveTo(alvoFisicoWokwi(DISPARO_PASSOS));
+    motorDisparo.setCurrentPosition(0);
+    motorDisparo.moveTo(DISPARO_PASSOS);
     tempoDisparo = millis();
     retornoDisparoIniciado = false;
     estadoAtual = FIRING;
     printEstado();
-    Serial.printf("[SIM] Disparo acionado (%d passos).\n", DISPARO_PASSOS);
+    Serial.printf("[SIM] Motor 2 liberando trava (%d passos).\n", DISPARO_PASSOS);
 }
 
 void processarComando(const String& cmd) {
@@ -190,20 +173,20 @@ void processarComando(const String& cmd) {
         passosSelecionados = stepsTabela[idx];
         autoDisparar = true;
         motorTensao.enableOutputs();
-        motorTensao.moveTo(alvoFisicoWokwi(passosSelecionados));
+        motorTensao.moveTo(passosSelecionados);
         estadoAtual = TENSIONING;
         printEstado();
-        Serial.printf("[SIM] LAUNCH %.2fm -> %d passos\n", dist, passosSelecionados);
+        Serial.printf("[SIM] LAUNCH %.2fm -> motor 1 tensiona %d passos\n", dist, passosSelecionados);
         return;
     }
 
     if (cmd == "ARM") {
         if (estadoAtual != IDLE) { Serial.println("[ERRO] Estado invalido para ARM."); return; }
         motorTensao.enableOutputs();
-        motorTensao.moveTo(alvoFisicoWokwi(passosSelecionados));
+        motorTensao.moveTo(passosSelecionados);
         estadoAtual = TENSIONING;
         printEstado();
-        Serial.printf("[SIM] Tensionando %d passos.\n", passosSelecionados);
+        Serial.printf("[SIM] Motor 1 tensionando %d passos.\n", passosSelecionados);
         return;
     }
 
@@ -227,7 +210,7 @@ void processarComando(const String& cmd) {
         }
         retornoDisparoIniciado = false;
         motorDisparo.stop();
-        motorDisparo.moveTo(alvoFisicoWokwi(0));
+        motorDisparo.moveTo(0);
         Serial.println("[SIM] ABORT solicitado.");
         iniciarRetornoTensionamento(false);
         return;
@@ -241,8 +224,8 @@ void processarComando(const String& cmd) {
     if (cmd == "STATUS") {
         Serial.printf("STATUS:%s:DIST:%.2fm:POS_T:%ld:POS_D:%ld\n",
                       nomeEstado(), distanciaAlvo,
-                      posicaoLogicaTensao(),
-                      posicaoLogicaDisparo());
+                      motorTensao.currentPosition(),
+                      motorDisparo.currentPosition());
         return;
     }
 
@@ -281,20 +264,20 @@ void setup() {
     ultimoBlink = millis();
 
     Serial.println("\n====================================================");
-    Serial.println("  HERCULES I - SIMULACAO WOKWI v2.0.0");
-    Serial.println("  2x 28BYJ-48 + ULN2003 | Equipe A2 / IME 2026.1");
+    Serial.println("  HERCULES I - SIMULACAO WOKWI v2.1.0");
+    Serial.println("  FSM real + drivers STEP/DIR visuais para Wokwi");
     Serial.println("====================================================");
-    Serial.println("  Antes de iniciar: posicione o mecanismo no zero e envie HOME.");
+    Serial.println("  Ciclo: motor 1 tensiona -> trava -> motor 1 volta -> motor 2 libera.");
     Serial.println("  LAUNCH:X.XX  SET:X.XX  ARM  FIRE  ABORT  HOME  STATUS  TABELA");
     Serial.println("====================================================\n");
 
     motorTensao.setMaxSpeed(T_VELOCIDADE_MAX);
     motorTensao.setAcceleration(T_ACELERACAO);
-    motorTensao.setCurrentPosition(alvoFisicoWokwi(0));
+    motorTensao.setCurrentPosition(0);
 
     motorDisparo.setMaxSpeed(D_VELOCIDADE_MAX);
     motorDisparo.setAcceleration(D_ACELERACAO);
-    motorDisparo.setCurrentPosition(alvoFisicoWokwi(0));
+    motorDisparo.setCurrentPosition(0);
 
     desenergizarMotores();
 
@@ -320,7 +303,7 @@ void loop() {
             motorTensao.run();
         } else if (estadoAtual == TENSIONING) {
             printEstado();
-            Serial.println("[SIM] TRAVADO pela engrenagem. Retornando motor de tensionamento ao zero.");
+            Serial.println("[SIM] TRAVADO pela engrenagem. Motor 1 voltando ao zero.");
             iniciarRetornoTensionamento(true);
         } else {
             motorTensao.disableOutputs();
@@ -330,7 +313,7 @@ void loop() {
                 tempoEntradaARMED = agora;
                 timeoutArmadoAvisado = false;
                 printEstado();
-                Serial.println("[SIM] ARMADO: tensionamento voltou a zero e a engrenagem segura a carga.");
+                Serial.println("[SIM] ARMADO: motor 1 esta em zero e a engrenagem segura a carga.");
                 if (autoDisparar) {
                     autoDisparar = false;
                     iniciarDisparo();
@@ -349,13 +332,14 @@ void loop() {
             motorDisparo.run();
         } else if (!retornoDisparoIniciado) {
             if (agora - tempoDisparo >= DISPARO_DELAY_MS) {
-                motorDisparo.moveTo(alvoFisicoWokwi(0));
+                motorDisparo.moveTo(0);
                 retornoDisparoIniciado = true;
+                Serial.println("[SIM] Motor 2 liberou a trava. Voltando ao zero.");
             }
         } else {
             motorDisparo.disableOutputs();
             estadoAtual = IDLE;
-            Serial.println("[SIM] DISPARADO! Motor de disparo voltou ao zero. Ciclo completo.");
+            Serial.println("[SIM] DISPARADO! Ambos motores em zero. Ciclo completo.");
             Serial.print("\n> ");
         }
     }

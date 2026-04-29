@@ -257,7 +257,7 @@ Arquivos:
 | `tools/build-wokwi.sh` | Compila a simulacao |
 | `tools/wokwi-console.py` | Console RFC2217 para comandos |
 
-No Wokwi, os motores aparecem ligados diretamente aos GPIOs para validar logica. No hardware real, use ULN2003 entre ESP32 e motor.
+No Wokwi, os motores passam por drivers STEP/DIR apenas como adaptadores visuais do simulador. Isso garante que o contador de passos exibido volte corretamente para zero. No hardware real, use ULN2003 entre ESP32 e cada motor 28BYJ-48.
 
 Teste:
 
