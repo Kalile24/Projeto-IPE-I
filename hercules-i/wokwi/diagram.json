@@ -1,98 +1,91 @@
 {
   "version": 1,
-  "author": "Equipe A2 — IPE I — IME 2026.1",
+  "author": "Equipe A2 — IPE I / IME 2026.1",
   "editor": "wokwi",
 
-  "$description": "Hercules I — ESP32 + 2× A4988 + 2× NEMA17 + Endstop",
-  "$color_legend": {
-    "blue":   "STEP / ADC",
-    "green":  "DIR / Bobinas motor",
-    "orange": "ENABLE / Endstop",
-    "yellow": "LED status",
-    "red":    "VCC (3V3 ou 5V)",
-    "black":  "GND"
-  },
+  "$notes": [
+    "Este diagrama é a referência de montagem do circuito físico.",
+    "Siga as mesmas ligações no hardware real.",
+    "Cores dos fios: azul=STEP, verde=DIR/bobinas, laranja=ENABLE/endstop, amarelo=LED, vermelho=VCC, preto=GND"
+  ],
 
   "parts": [
 
     {
       "type": "wokwi-esp32-devkit-v1",
       "id":   "esp",
-      "top":  200, "left": 350,
-      "attrs": { "label": "ESP32 — Hercules I" }
+      "top":  150, "left": 380,
+      "attrs": { "label": "ESP32 DevKit V1" }
     },
 
     {
       "type": "wokwi-a4988",
       "id":   "driver_t",
-      "top":  60, "left": 100,
-      "attrs": { "label": "A4988 — Motor Tensionamento" }
+      "top":  0, "left": 120,
+      "attrs": { "label": "A4988 — Motor tensionamento (elástico)" }
     },
 
     {
       "type": "wokwi-stepper-motor",
       "id":   "motor_t",
-      "top":  0, "left": -120,
+      "top":  0, "left": -140,
       "attrs": {
         "display": "steps",
         "arrow":   "CCW",
-        "label":   "NEMA 17 — Tensionamento"
+        "label":   "NEMA 17 — tensionamento"
       }
     },
 
     {
       "type": "wokwi-a4988",
       "id":   "driver_d",
-      "top":  300, "left": 100,
-      "attrs": { "label": "A4988 — Motor Disparo" }
+      "top":  320, "left": 120,
+      "attrs": { "label": "A4988 — Motor disparo (gatilho)" }
     },
 
     {
       "type": "wokwi-stepper-motor",
       "id":   "motor_d",
-      "top":  340, "left": -120,
+      "top":  320, "left": -140,
       "attrs": {
         "display": "steps",
         "arrow":   "CW",
-        "label":   "NEMA 17 — Disparo/Gatilho"
-      }
-    },
-
-    {
-      "type": "wokwi-led",
-      "id":   "led_status",
-      "top":  200, "left": 680,
-      "attrs": {
-        "color": "yellow",
-        "label": "LED — Status FSM (GPIO 2)"
-      }
-    },
-
-    {
-      "type": "wokwi-resistor",
-      "id":   "r_led",
-      "top":  250, "left": 650,
-      "attrs": {
-        "value": "220",
-        "label": "R1 220Ω — LED"
+        "label":   "NEMA 17 — disparo"
       }
     },
 
     {
       "type": "wokwi-pushbutton",
       "id":   "endstop",
-      "top":  400, "left": 660,
+      "top":  150, "left": 680,
       "attrs": {
         "color": "green",
-        "label": "SW1 — Fim de curso (GPIO 25)"
+        "label": "Fim de curso — GPIO 25 (pressione durante HOME)"
       }
+    },
+
+    {
+      "type": "wokwi-led",
+      "id":   "led_status",
+      "top":  260, "left": 700,
+      "attrs": {
+        "color": "yellow",
+        "label": "LED status — GPIO 2"
+      }
+    },
+
+    {
+      "type": "wokwi-resistor",
+      "id":   "r_led",
+      "top":  310, "left": 670,
+      "attrs": { "value": "220", "label": "220 Ω" }
     },
 
     {
       "type": "wokwi-potentiometer",
       "id":   "pot_bat",
-      "top":  480, "left": 660,
-      "attrs": { "label": "Bateria simulada (GPIO 34)" }
+      "top":  390, "left": 680,
+      "attrs": { "label": "Bateria simulada — GPIO 34 (gire para mudar %)" }
     }
 
   ],
@@ -105,16 +98,15 @@
     ["esp:D26", "driver_t:STEP",   "blue",   []],
     ["esp:D27", "driver_t:DIR",    "green",  []],
     ["esp:D14", "driver_t:ENABLE", "orange", []],
-
-    ["esp:3V3", "driver_t:SLEEP",  "red",   []],
-    ["esp:3V3", "driver_t:RESET",  "red",   []],
-    ["esp:GND", "driver_t:MS1",   "black", []],
-    ["esp:GND", "driver_t:MS2",   "black", []],
-    ["esp:GND", "driver_t:MS3",   "black", []],
-    ["esp:5V",  "driver_t:VMOT",   "red",   []],
-    ["esp:GND", "driver_t:GND.2",  "black", []],
-    ["esp:3V3", "driver_t:VDD",    "red",   []],
-    ["esp:GND", "driver_t:GND.1",  "black", []],
+    ["esp:3V3", "driver_t:SLEEP",  "red",    []],
+    ["esp:3V3", "driver_t:RESET",  "red",    []],
+    ["esp:GND", "driver_t:MS1",    "black",  []],
+    ["esp:GND", "driver_t:MS2",    "black",  []],
+    ["esp:GND", "driver_t:MS3",    "black",  []],
+    ["esp:5V",  "driver_t:VMOT",   "red",    []],
+    ["esp:GND", "driver_t:GND.2",  "black",  []],
+    ["esp:3V3", "driver_t:VDD",    "red",    []],
+    ["esp:GND", "driver_t:GND.1",  "black",  []],
 
     ["driver_t:1B", "motor_t:B-", "green", []],
     ["driver_t:1A", "motor_t:B+", "green", []],
@@ -124,28 +116,27 @@
     ["esp:D18", "driver_d:STEP",   "blue",   []],
     ["esp:D19", "driver_d:DIR",    "green",  []],
     ["esp:D21", "driver_d:ENABLE", "orange", []],
-
-    ["esp:3V3", "driver_d:SLEEP",  "red",   []],
-    ["esp:3V3", "driver_d:RESET",  "red",   []],
-    ["esp:GND", "driver_d:MS1",   "black", []],
-    ["esp:GND", "driver_d:MS2",   "black", []],
-    ["esp:GND", "driver_d:MS3",   "black", []],
-    ["esp:5V",  "driver_d:VMOT",   "red",   []],
-    ["esp:GND", "driver_d:GND.2",  "black", []],
-    ["esp:3V3", "driver_d:VDD",    "red",   []],
-    ["esp:GND", "driver_d:GND.1",  "black", []],
+    ["esp:3V3", "driver_d:SLEEP",  "red",    []],
+    ["esp:3V3", "driver_d:RESET",  "red",    []],
+    ["esp:GND", "driver_d:MS1",    "black",  []],
+    ["esp:GND", "driver_d:MS2",    "black",  []],
+    ["esp:GND", "driver_d:MS3",    "black",  []],
+    ["esp:5V",  "driver_d:VMOT",   "red",    []],
+    ["esp:GND", "driver_d:GND.2",  "black",  []],
+    ["esp:3V3", "driver_d:VDD",    "red",    []],
+    ["esp:GND", "driver_d:GND.1",  "black",  []],
 
     ["driver_d:1B", "motor_d:B-", "green", []],
     ["driver_d:1A", "motor_d:B+", "green", []],
     ["driver_d:2A", "motor_d:A+", "green", []],
     ["driver_d:2B", "motor_d:A-", "green", []],
 
+    ["esp:D25",     "endstop:1.l", "orange", []],
+    ["endstop:2.l", "esp:GND",     "black",  []],
+
     ["esp:D2",       "r_led:1",      "yellow", []],
     ["r_led:2",      "led_status:A", "yellow", []],
     ["led_status:K", "esp:GND",      "black",  []],
-
-    ["esp:D25",     "endstop:1.l", "orange", []],
-    ["endstop:2.l", "esp:GND",     "black",  []],
 
     ["pot_bat:VCC", "esp:3V3", "red",   []],
     ["pot_bat:SIG", "esp:D34", "blue",  []],

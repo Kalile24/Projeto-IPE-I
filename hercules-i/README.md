@@ -2,187 +2,118 @@
 
 **Equipe A2 — IPE I / Instituto Militar de Engenharia — 2026.1**
 
-Catapulta de palitos de picolé com controle via Bluetooth. Selecione a distância no celular (0,5 m a 4,0 m) e dispare remotamente.
+Catapulta de palitos de picolé com controle via Bluetooth. Selecione a distância (0,5 m a 4,0 m) e dispare pelo celular.
 
 ---
 
-## Hardware necessário
+## Lista de materiais
 
-| Componente | Quantidade | Observação |
-|---|---|---|
-| ESP32 DevKit V1 | 1 | Qualquer variante com 38 pinos |
-| Driver A4988 | 2 | Um para tensionamento, um para disparo |
-| Motor NEMA 17 | 2 | ≥ 40 N·cm de torque |
-| Microchave endstop | 1 | NA (normalmente aberto) |
-| Step-down MP1584 | 1 | Ajustado para 5V |
-| 6× pilhas AA | 1 conjunto | 9V bruto |
-| Resistores 100kΩ e 10kΩ | 1 cada | Divisor de tensão para ADC |
-| LED + resistor 220Ω | 1 | Status visual |
-| Capacitor 100µF + 100nF | 2 pares | Um por driver — VMOT obrigatório |
+| Componente | Qtd |
+|---|---|
+| ESP32 DevKit V1 | 1 |
+| Driver A4988 | 2 |
+| Motor NEMA 17 (≥ 40 N·cm) | 2 |
+| Microchave fim de curso (NA) | 1 |
+| Conversor step-down MP1584 | 1 |
+| 6× pilhas AA | 1 conjunto |
+| Resistor 100 kΩ | 1 |
+| Resistor 10 kΩ | 1 |
+| Capacitor 100 µF + 100 nF | 2 pares (1 por driver) |
+| LED + resistor 220 Ω | 1 |
 
 ---
 
 ## Pinagem
 
-### Motor de tensionamento (elástico)
-| ESP32 | A4988 |
-|---|---|
-| GPIO 26 | STEP |
-| GPIO 27 | DIR |
-| GPIO 14 | ENABLE |
-
-### Motor de disparo (gatilho)
-| ESP32 | A4988 |
-|---|---|
-| GPIO 18 | STEP |
-| GPIO 19 | DIR |
-| GPIO 21 | ENABLE |
-
-### Outros
 | GPIO | Função |
 |---|---|
-| 25 | Fim de curso (microchave NA → GND, pullup interno) |
-| 34 | ADC bateria (divisor R1=100kΩ / R2=10kΩ) |
+| 26 | Motor tensionamento — STEP |
+| 27 | Motor tensionamento — DIR |
+| 14 | Motor tensionamento — ENABLE |
+| 18 | Motor disparo — STEP |
+| 19 | Motor disparo — DIR |
+| 21 | Motor disparo — ENABLE |
+| 25 | Fim de curso (NA → GND, pullup interno) |
+| 34 | ADC bateria (divisor 100 kΩ / 10 kΩ) |
 | 2 | LED de status |
 
-### Alimentação dos drivers
-```
-6× AA → [step-down 5V] → VMOT dos dois A4988
-                        → 5V dos dois A4988
-ESP32 3V3 → VDD dos dois A4988
-GND comum entre tudo
-```
-
-> **Atenção:** Coloque os capacitores (100µF + 100nF) nos pinos VMOT/GND de cada driver. Sem eles o driver pode queimar ao energizar o motor.
+> O motor de disparo **não precisa de fim de curso** — ele gira um número fixo de passos e retorna à posição zero por contagem interna.
 
 ---
 
-## Montagem do circuito
+## Montagem
 
-1. **Step-down:** Conecte as pilhas na entrada. Ajuste o trimpot até a saída marcar exatamente 5,0V com as pilhas instaladas.
-2. **Drivers A4988:** MS1, MS2, MS3 no GND (passo inteiro). SLEEP e RESET no 3V3.
-3. **Motor de tensionamento:** Bobinas A+ A- → 2A 2B do driver_t; B+ B- → 1A 1B.
-4. **Motor de disparo:** Mesma lógica de bobinas no driver_d.
-5. **Endstop:** Fio 1 em GPIO 25, fio 2 no GND. Posicione no ponto de zero mecânico.
-6. **Divisor bateria:** R1=100kΩ em série com R2=10kΩ. Ponto médio (entre R1 e R2) em GPIO 34. Ponta positiva do divisor na bateria (+9V), ponta negativa no GND.
+1. **Step-down:** ligue as pilhas na entrada e ajuste o trimpot para **5,0 V** na saída (meça com multímetro com as pilhas instaladas).
+2. **A4988 — configuração de microstepping:** MS1, MS2, MS3 → GND (passo inteiro). SLEEP e RESET → 3V3.
+3. **A4988 — alimentação:** VMOT e GND do motor → saída do step-down (5 V). VDD → 3V3 do ESP32. GND comum.
+4. **Capacitores:** solde 100 µF + 100 nF entre VMOT e GND de **cada** driver. Sem eles o driver queima ao energizar.
+5. **Motores:** conecte as bobinas conforme a identificação do cabo (A+/A−/B+/B−). Se o motor girar ao contrário, inverta um par de bobinas.
+6. **Fim de curso:** um fio em GPIO 25, outro no GND. Posicione no ponto de zero mecânico do motor de tensionamento.
+7. **Divisor de bateria:** R1 = 100 kΩ em série com R2 = 10 kΩ. O ponto médio vai ao GPIO 34. R1 liga à bateria (+9 V) e R2 ao GND.
 
----
-
-## Testar na simulação (Wokwi)
-
-```bash
-cd hercules-i
-tools/build-wokwi.sh          # compila o sketch da simulação
-```
-
-No VS Code: `F1 → Wokwi: Start Simulator`
-
-Em outro terminal:
-```bash
-tools/wokwi-console.py
-```
-
-Sequência de teste:
-```
-STATUS          → verifica estado inicial
-SET:1.50        → define 1,50 m
-ARM             → tensiona o elástico (motor 1 gira)
-FIRE            → dispara (motor 2 gira e volta)
-STATUS          → confirma retorno ao IDLE
-```
-
-Para testar o fim de curso: envie `HOME` e pressione o botão verde no diagrama.
+> O Wokwi (`wokwi/diagram.json`) mostra todas as ligações de forma visual — use como referência para a montagem física.
 
 ---
 
-## Carregar firmware no ESP32
+## Testando pelo PC (Serial Monitor)
 
-1. Abra `firmware/hercules_firmware/` no Arduino IDE 2.x
-2. Ferramentas → Placa → ESP32 Dev Module
-3. Ferramentas → Porta → `/dev/ttyUSB0` (ou COM na Windows)
-4. Clique **Carregar**
+O firmware imprime tudo no Serial (115200 baud) e aceita os mesmos comandos pelo Serial Monitor do Arduino IDE. **Teste assim antes de usar o celular.**
 
-Bibliotecas necessárias (instalar pelo Library Manager):
-- **AccelStepper** (Mike McCaulay)
+1. Carregue o firmware no ESP32 (Arduino IDE → Carregar)
+2. Abra o Serial Monitor (115200 baud, terminação LF)
+3. Digite os comandos:
+
+```
+STATUS          → mostra estado atual e bateria
+LAUNCH:1.50     → tensiona e dispara em 1,50 m (sequência completa)
+ABORT           → para tudo e retorna ao zero
+HOME            → executa homing (acione o fim de curso quando pedido)
+```
+
+Todos os comandos disponíveis:
+
+| Comando | Função |
+|---|---|
+| `LAUNCH:X.XX` | Sequência completa — tensiona e dispara |
+| `SET:X.XX` | Define distância sem armar |
+| `ARM` | Arma (requer SET antes) |
+| `FIRE` | Dispara (requer ARMED) |
+| `ABORT` | Para tudo, retorna ao zero |
+| `HOME` | Re-executa homing |
+| `STATUS` | Estado, bateria e posição |
+| `CAL:X.XX:N` | Ajusta passos na RAM (ex: `CAL:1.50:395`) |
 
 ---
 
-## App mobile (MIT App Inventor — Android)
+## App Android (MIT App Inventor)
 
-Comunicação via **Bluetooth Clássico SPP** — sem extensões externas, funciona em qualquer Android.
+Comunicação via **Bluetooth Clássico** — sem extensões, funciona em qualquer Android.
 
-O arquivo `app/HerculesI.aia` é o projeto pronto para importar.
-
-### Como instalar
+### Instalação
 
 1. Acesse [ai2.appinventor.mit.edu](https://ai2.appinventor.mit.edu)
 2. **Projects → Import project (.aia)** → selecione `app/HerculesI.aia`
 3. **Build → Android App (.apk)** → instale no celular
 
-> Mais rápido para testes: instale **MIT AI2 Companion** (Play Store) e clique **Connect → AI Companion** no site — abre o app na hora sem gerar APK.
+> Teste rápido sem gerar APK: instale **MIT AI2 Companion** (Play Store) e use **Connect → AI Companion**.
 
-### Emparelhar o ESP32 antes de usar
+### Emparelhamento (fazer uma vez)
 
-1. No Android: Configurações → Bluetooth → Procurar dispositivos
-2. Selecione **Hercules-I** → PIN: **1234**
-3. Abra o app → toque **CONECTAR** → selecione Hercules-I na lista
+1. Ligue o ESP32 → aguarde o LED piscar
+2. Android → Configurações → Bluetooth → selecione **Hercules-I** → PIN: **1234**
 
-### Fluxo de uso
+### Uso
 
-```
-1. CONECTAR → seleciona Hercules-I na lista de dispositivos emparelhados
-2. Ajuste a distância (slider ou botões 0.5 / 1.0 / 2.0 / 3.0 / 4.0 m)
-3. LANÇAR → catapulta tensiona e dispara automaticamente
-4. ABORTAR a qualquer momento retorna ao zero
-```
-
-Estado atual (TENSIONING, ARMED, FIRING…) e bateria atualizam a cada 3 segundos.
-
----
-
-## Estados da FSM
-
-```
-IDLE → (ARM) → TENSIONING → (motor chega) → ARMED
-ARMED → (FIRE) → FIRING → (motor disparo) → RETURNING → IDLE
-Qualquer estado → (ABORT) → RETURNING → IDLE
-IDLE → (HOME) → HOMING → IDLE
-```
-
-LED de status:
-- **Piscando lento (1 Hz):** IDLE
-- **Piscando rápido (5 Hz):** TENSIONING / HOMING
-- **Aceso fixo:** ARMED
-- **Piscando muito rápido:** FIRING / RETURNING
-- **SOS em Morse:** bateria crítica (< 85% de 9V)
-
----
-
-## Protocolo BLE
-
-**Serviço:** `12345678-1234-1234-1234-123456789abc`
-
-| Characterística | UUID | Direção | Exemplos |
-|---|---|---|---|
-| Comando | `...ab1` | Write | `SET:1.50`, `ARM`, `FIRE`, `ABORT` |
-| Status | `...ab2` | Notify | `ARMED`, `FIRED`, `IDLE` |
-
-Comandos completos:
-```
-SET:X.XX        Distância (0.50 a 4.00 m, passo 0.25 m)
-ARM             Inicia tensionamento
-FIRE            Aciona disparo
-ABORT           Para tudo e retorna ao zero
-HOME            Re-executa homing
-STATUS          Retorna estado, bateria e posição
-CAL:X.XX:NNN    Atualiza passos na RAM (ex: CAL:1.50:395)
-```
+1. Abra o app → **CONECTAR** → selecione Hercules-I
+2. Escolha a distância (slider ou botões rápidos)
+3. **LANÇAR** → catapulta tensiona e dispara automaticamente
+4. **ABORTAR** cancela e retorna ao zero a qualquer momento
 
 ---
 
 ## Calibração
 
-Após testes reais, colete medições e gere uma nova tabela:
+Após testes reais, ajuste a tabela de passos:
 
 ```bash
 python calibration/calibrar.py --input dados_teste.csv --output firmware/hercules_firmware/lookup_table.h
@@ -194,36 +125,44 @@ distancia_m,passos,distancia_real_m,desvio_lateral_cm
 1.50,410,1.47,5
 ```
 
-Também é possível calibrar em campo sem recompilar:
+Ou ajuste em campo sem recompilar:
 ```
 CAL:1.50:395    → define 1,50 m = 395 passos (persiste até reiniciar)
 ```
 
 ---
 
-## Motor de disparo — ajuste físico
+## LED de status
 
-O motor de disparo faz **200 passos** (1 volta completa com passo inteiro) para liberar o gatilho. Ajuste a constante `DISPARO_PASSOS` no firmware conforme o mecanismo físico:
-
-```cpp
-// hercules_firmware.ino
-#define DISPARO_PASSOS  200   // Aumente se o gatilho não liberar completamente
-```
-
-Para testar isoladamente na simulação: coloque em ARMED e envie `FIRE` — o motor de disparo (NEMA 17 direito no diagrama) deve girar e retornar.
+| Padrão | Estado |
+|---|---|
+| Pisca lento (1 Hz) | IDLE — aguardando comando |
+| Pisca rápido (5 Hz) | TENSIONING / HOMING |
+| Aceso fixo | ARMED — pronto para disparar |
+| Pisca muito rápido | FIRING / RETURNING |
+| SOS Morse | Bateria crítica (< 7,65 V) |
 
 ---
 
-## Solução de problemas
+## Ajuste do motor de disparo
 
-| Sintoma | Causa provável | Solução |
-|---|---|---|
-| Motor não gira | ENABLE no nível errado | Confirme `MOTOR_ENABLE_ON LOW` no código |
-| Homing sem parar | Endstop não detectado | Verifique fiação GPIO 25 → chave → GND |
-| Motor treme / perde passo | Corrente do driver mal ajustada | Ajuste o trimpot do A4988 (Vref = I × 8 × Rs) |
-| BLE não aparece | ESP32 sem alimentação estável | Use USB + fonte externa para VMOT separados |
-| App não conecta | Permissões Bluetooth negadas | Configurações → Apps → Expo Go → Permissões → Bluetooth |
-| Motor de disparo não retorna | `DISPARO_DELAY_MS` muito curto | Aumente o valor no firmware |
+O motor de disparo gira **200 passos** (1 volta completa) para liberar o gatilho. Se o mecanismo não liberar completamente, aumente este valor no firmware:
+
+```cpp
+#define DISPARO_PASSOS  200   // ajuste conforme o mecanismo físico
+```
+
+---
+
+## Problemas comuns
+
+| Sintoma | Solução |
+|---|---|
+| Motor não gira | Verifique ENABLE — deve estar em LOW para ativar |
+| Homing não para | Verifique fiação: GPIO 25 → chave → GND |
+| Motor treme ou perde passo | Ajuste o trimpot do A4988 (Vref = I_motor × 8 × Rs) |
+| Bluetooth não aparece | Aguarde ~5 s após ligar o ESP32 antes de procurar |
+| App não conecta | Refaça o emparelhamento no Android |
 
 ---
 
@@ -231,21 +170,19 @@ Para testar isoladamente na simulação: coloque em ARMED e envie `FIRE` — o m
 
 ```
 hercules-i/
-├── firmware/
-│   └── hercules_firmware/
-│       ├── hercules_firmware.ino   ← Firmware principal
-│       └── lookup_table.h          ← Tabela de calibração
+├── firmware/hercules_firmware/
+│   ├── hercules_firmware.ino   ← Firmware principal (Arduino IDE)
+│   └── lookup_table.h          ← Tabela distância → passos
 ├── wokwi/
-│   ├── sketch.ino                  ← Firmware da simulação
-│   ├── diagram.json                ← Circuito virtual
+│   ├── sketch.ino              ← Simulação (Serial puro)
+│   ├── diagram.json            ← Circuito virtual (referência de montagem)
 │   └── wokwi.toml
 ├── app/
-│   └── hercules-app/               ← App React Native (Expo)
+│   └── HerculesI.aia           ← App MIT App Inventor
 ├── calibration/
-│   ├── calibrar.py                 ← Gerador de lookup_table.h
+│   ├── calibrar.py
 │   └── dados_exemplo.csv
 └── tools/
-    ├── build-wokwi.sh              ← Compila simulação
-    ├── wokwi-console.py            ← Console serial para Wokwi
-    └── teste_ble.py                ← Teste BLE via Linux
+    ├── build-wokwi.sh
+    └── wokwi-console.py
 ```

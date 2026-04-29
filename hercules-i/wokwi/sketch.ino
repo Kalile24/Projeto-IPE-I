@@ -1,30 +1,27 @@
 /**
- * Hércules I — Simulação Wokwi v1.3.0
+ * Hércules I — Simulação Wokwi v1.4.0
  * Equipe A2 / IPE I / IME 2026.1
  *
- * Espelha o firmware real com as seguintes adaptações para simulação:
- *   - BLE substituído por Serial Monitor (9600 baud)
- *   - Sem FreeRTOS / mutex (Serial é single-task)
- *   - Potenciômetro em GPIO 34 simula o divisor resistivo da bateria
- *   - Homing inicial ignorado — use o comando HOME para testar
+ * Use esta simulação para validar a lógica antes de montar o hardware.
+ * O diagram.json é a referência visual de montagem do circuito real.
  *
- * PINAGEM (idêntica ao firmware real):
- *   Motor tensionamento:  GPIO 26 (STEP), GPIO 27 (DIR), GPIO 14 (ENABLE)
- *   Motor disparo:        GPIO 18 (STEP), GPIO 19 (DIR), GPIO 21 (ENABLE)
- *   Fim de curso:         GPIO 25 (botão verde no diagrama)
- *   Bateria (simulada):   GPIO 34 (potenciômetro)
- *   LED status:           GPIO  2
+ * Diferenças em relação ao firmware real:
+ *   - Bluetooth substituído por Serial Monitor (mesmos comandos)
+ *   - Potenciômetro em GPIO 34 simula o divisor de tensão da bateria
+ *   - Homing inicial ignorado — use HOME + botão ENDSTOP para testar
  *
- * COMANDOS DISPONÍVEIS:
- *   LAUNCH:X.XX  Sequência completa: tensiona e dispara automaticamente
- *   SET:X.XX     Define distância (ex: SET:1.50)
- *   ARM          Arma a catapulta
- *   FIRE         Dispara (requer ARM antes)
- *   ABORT        Aborta e retorna ao zero
- *   HOME         Homing — pressione o botão ENDSTOP durante a sequência
- *   STATUS       Exibe estado, posição e bateria
- *   CAL:X.XX:N   Calibra distância em RAM
- *   TABELA       Exibe lookup table completa
+ * PINAGEM — idêntica ao hardware real:
+ *   Motor tensionamento:  GPIO 26 (STEP), 27 (DIR), 14 (ENABLE)
+ *   Motor disparo:        GPIO 18 (STEP), 19 (DIR), 21 (ENABLE)
+ *   Fim de curso:         GPIO 25 — botão verde no diagrama
+ *   Bateria (simulada):   GPIO 34 — potenciômetro no diagrama
+ *   LED status:           GPIO 2
+ *
+ * SEQUÊNCIA DE TESTE:
+ *   STATUS          verifica estado inicial
+ *   LAUNCH:1.50     tensiona e dispara em 1,50 m (sequência completa)
+ *   ABORT           para tudo e retorna ao zero
+ *   HOME            homing — pressione o botão verde quando solicitado
  */
 
 #include <AccelStepper.h>

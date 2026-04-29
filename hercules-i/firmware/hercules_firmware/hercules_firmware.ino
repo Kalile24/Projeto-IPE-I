@@ -1,11 +1,13 @@
 /**
  * Hércules I — Equipe A2 / IPE I / IME 2026.1
- * Firmware v1.3.0 — Abril/2026
+ * Firmware v1.4.0 — Abril/2026
  *
- * COMUNICAÇÃO: Bluetooth Clássico SPP (Serial Port Profile)
- *   Nome do dispositivo: "Hercules-I"
- *   PIN de emparelhamento: 1234
- *   Protocolo: texto simples, comandos terminados em '\n'
+ * COMUNICAÇÃO DUAL:
+ *   Serial Monitor (115200 baud) — teste pelo PC via USB
+ *   Bluetooth Clássico SPP       — controle pelo celular Android
+ *     Nome: "Hercules-I" | PIN: 1234
+ *
+ * Ambos os canais aceitam os mesmos comandos e recebem as mesmas respostas.
  *
  * PINAGEM:
  *   Motor de tensionamento (NEMA 17 + A4988):
@@ -109,13 +111,16 @@ int   percentualBateria = 100;
 BluetoothSerial BT;
 AccelStepper motorTensao(AccelStepper::DRIVER,  PIN_T_STEP, PIN_T_DIR);
 AccelStepper motorDisparo(AccelStepper::DRIVER, PIN_D_STEP, PIN_D_DIR);
-String bufferBT = "";
+String bufferBT     = "";
+String bufferSerial = "";  // Leitura de comandos via Serial (teste pelo PC)
 
 // ─── Funções auxiliares ───────────────────────────────────────────────────────
 
+// Envia mensagem pelo Bluetooth E pelo Serial simultaneamente.
+// Permite testar pelo PC (Serial Monitor) sem precisar do celular.
 void enviarStatus(const String& msg) {
     BT.println(msg);
-    Serial.println("[BT TX] " + msg);
+    Serial.println(msg);
 }
 
 void habilitarMotorT()   { digitalWrite(PIN_T_ENABLE, MOTOR_ENABLE_ON);  }
@@ -358,8 +363,10 @@ void setup() {
     executarHoming();
 
     BT.begin("Hercules-I");
-    Serial.println("[BT] Aguardando conexão como 'Hercules-I' (PIN: 1234)...");
-    Serial.println("[INIT] Pronto — IDLE\n");
+
+    Serial.println("Pronto. Comandos aceitos pelo Serial Monitor e pelo Bluetooth.");
+    Serial.println("  LAUNCH:X.XX  SET:X.XX  ARM  FIRE  ABORT  HOME  STATUS  CAL:X.XX:N");
+    Serial.println("Bluetooth: emparelhe 'Hercules-I' no Android (PIN: 1234)\n");
 }
 
 // ─── Loop principal ────────────────────────────────────────────────────────────
@@ -425,17 +432,21 @@ void loop() {
         }
     }
 
-    // ── Leitura de comandos Bluetooth ─────────────────────────────────────────
+    // ── Leitura de comandos via Bluetooth ────────────────────────────────────
     while (BT.available()) {
         char c = (char)BT.read();
         if (c == '\n' || c == '\r') {
             bufferBT.trim();
-            if (bufferBT.length() > 0) {
-                processarComando(bufferBT);
-                bufferBT = "";
-            }
-        } else {
-            bufferBT += c;
-        }
+            if (bufferBT.length() > 0) { processarComando(bufferBT); bufferBT = ""; }
+        } else { bufferBT += c; }
+    }
+
+    // ── Leitura de comandos via Serial Monitor (teste pelo PC) ───────────────
+    while (Serial.available()) {
+        char c = (char)Serial.read();
+        if (c == '\n' || c == '\r') {
+            bufferSerial.trim();
+            if (bufferSerial.length() > 0) { processarComando(bufferSerial); bufferSerial = ""; }
+        } else { bufferSerial += c; }
     }
 }
