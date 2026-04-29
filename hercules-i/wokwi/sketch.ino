@@ -67,9 +67,23 @@ unsigned long tempoEntradaARMED = 0;
 unsigned long tempoDisparo = 0;
 unsigned long ultimoBlink = 0;
 
-AccelStepper motorTensao(AccelStepper::HALF4WIRE, PIN_T_IN1, PIN_T_IN3, PIN_T_IN2, PIN_T_IN4);
-AccelStepper motorDisparo(AccelStepper::HALF4WIRE, PIN_D_IN1, PIN_D_IN3, PIN_D_IN2, PIN_D_IN4);
+// No Wokwi, FULL4WIRE faz o display "steps" bater 1:1 com os passos logicos.
+// O sinal e invertido porque a ordem visual das bobinas gira no sentido oposto.
+AccelStepper motorTensao(AccelStepper::FULL4WIRE, PIN_T_IN1, PIN_T_IN3, PIN_T_IN2, PIN_T_IN4);
+AccelStepper motorDisparo(AccelStepper::FULL4WIRE, PIN_D_IN1, PIN_D_IN3, PIN_D_IN2, PIN_D_IN4);
 String bufferSerial = "";
+
+long alvoFisicoWokwi(long passosLogicos) {
+    return -passosLogicos;
+}
+
+long posicaoLogicaTensao() {
+    return -motorTensao.currentPosition();
+}
+
+long posicaoLogicaDisparo() {
+    return -motorDisparo.currentPosition();
+}
 
 const char* nomeEstado() {
     static const char* nomes[] = {"IDLE", "TENSIONING", "ARMED", "FIRING", "RETURNING"};
@@ -116,17 +130,17 @@ void desenergizarMotores() {
 
 void iniciarRetorno() {
     motorTensao.enableOutputs();
-    motorTensao.moveTo(0);
+    motorTensao.moveTo(alvoFisicoWokwi(0));
     estadoAtual = RETURNING;
     printEstado();
-    Serial.printf("[SIM] Retornando tensionamento para zero. Posicao atual: %ld\n", motorTensao.currentPosition());
+    Serial.printf("[SIM] Retornando tensionamento para zero. Posicao logica atual: %ld\n", posicaoLogicaTensao());
 }
 
 void zerarPosicaoManual() {
     motorTensao.stop();
     motorDisparo.stop();
-    motorTensao.setCurrentPosition(0);
-    motorDisparo.setCurrentPosition(0);
+    motorTensao.setCurrentPosition(alvoFisicoWokwi(0));
+    motorDisparo.setCurrentPosition(alvoFisicoWokwi(0));
     autoDisparar = false;
     retornoDisparoIniciado = false;
     estadoAtual = IDLE;
@@ -137,8 +151,8 @@ void zerarPosicaoManual() {
 
 void iniciarDisparo() {
     motorDisparo.enableOutputs();
-    motorDisparo.setCurrentPosition(0);
-    motorDisparo.moveTo(DISPARO_PASSOS);
+    motorDisparo.setCurrentPosition(alvoFisicoWokwi(0));
+    motorDisparo.moveTo(alvoFisicoWokwi(DISPARO_PASSOS));
     tempoDisparo = millis();
     retornoDisparoIniciado = false;
     estadoAtual = FIRING;
@@ -171,7 +185,7 @@ void processarComando(const String& cmd) {
         passosSelecionados = stepsTabela[idx];
         autoDisparar = true;
         motorTensao.enableOutputs();
-        motorTensao.moveTo(passosSelecionados);
+        motorTensao.moveTo(alvoFisicoWokwi(passosSelecionados));
         estadoAtual = TENSIONING;
         printEstado();
         Serial.printf("[SIM] LAUNCH %.2fm -> %d passos\n", dist, passosSelecionados);
@@ -181,7 +195,7 @@ void processarComando(const String& cmd) {
     if (cmd == "ARM") {
         if (estadoAtual != IDLE) { Serial.println("[ERRO] Estado invalido para ARM."); return; }
         motorTensao.enableOutputs();
-        motorTensao.moveTo(passosSelecionados);
+        motorTensao.moveTo(alvoFisicoWokwi(passosSelecionados));
         estadoAtual = TENSIONING;
         printEstado();
         Serial.printf("[SIM] Tensionando %d passos.\n", passosSelecionados);
@@ -198,7 +212,7 @@ void processarComando(const String& cmd) {
         autoDisparar = false;
         retornoDisparoIniciado = false;
         motorDisparo.stop();
-        motorDisparo.moveTo(0);
+        motorDisparo.moveTo(alvoFisicoWokwi(0));
         Serial.println("[SIM] ABORT solicitado.");
         iniciarRetorno();
         return;
@@ -212,8 +226,8 @@ void processarComando(const String& cmd) {
     if (cmd == "STATUS") {
         Serial.printf("STATUS:%s:DIST:%.2fm:POS_T:%ld:POS_D:%ld\n",
                       nomeEstado(), distanciaAlvo,
-                      motorTensao.currentPosition(),
-                      motorDisparo.currentPosition());
+                      posicaoLogicaTensao(),
+                      posicaoLogicaDisparo());
         return;
     }
 
@@ -261,11 +275,11 @@ void setup() {
 
     motorTensao.setMaxSpeed(T_VELOCIDADE_MAX);
     motorTensao.setAcceleration(T_ACELERACAO);
-    motorTensao.setCurrentPosition(0);
+    motorTensao.setCurrentPosition(alvoFisicoWokwi(0));
 
     motorDisparo.setMaxSpeed(D_VELOCIDADE_MAX);
     motorDisparo.setAcceleration(D_ACELERACAO);
-    motorDisparo.setCurrentPosition(0);
+    motorDisparo.setCurrentPosition(alvoFisicoWokwi(0));
 
     desenergizarMotores();
 
@@ -310,7 +324,7 @@ void loop() {
             motorDisparo.run();
         } else if (!retornoDisparoIniciado) {
             if (agora - tempoDisparo >= DISPARO_DELAY_MS) {
-                motorDisparo.moveTo(0);
+                motorDisparo.moveTo(alvoFisicoWokwi(0));
                 retornoDisparoIniciado = true;
             }
         } else {
