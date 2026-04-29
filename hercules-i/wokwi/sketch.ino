@@ -246,6 +246,11 @@ void setup() {
     Serial.begin(115200);
     delay(500);
 
+    pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, HIGH);
+    estadoLED = true;
+    ultimoBlink = millis();
+
     Serial.println("\n====================================================");
     Serial.println("  HERCULES I - SIMULACAO WOKWI v2.0.0");
     Serial.println("  2x 28BYJ-48 + ULN2003 | Equipe A2 / IME 2026.1");
@@ -253,8 +258,6 @@ void setup() {
     Serial.println("  Antes de iniciar: posicione o mecanismo no zero e envie HOME.");
     Serial.println("  LAUNCH:X.XX  SET:X.XX  ARM  FIRE  ABORT  HOME  STATUS  TABELA");
     Serial.println("====================================================\n");
-
-    pinMode(PIN_LED, OUTPUT);
 
     motorTensao.setMaxSpeed(T_VELOCIDADE_MAX);
     motorTensao.setAcceleration(T_ACELERACAO);

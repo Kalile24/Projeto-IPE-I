@@ -245,6 +245,9 @@ void setup() {
     Serial.println("\n=== Hercules I v2.0.0 - 28BYJ-48 + ULN2003 ===\n");
 
     pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, HIGH);
+    estadoLED = true;
+    ultimoBlink = millis();
 
     for (int i = 0; i < TABLE_SIZE; i++) stepsRAM[i] = STEPS_TABLE[i];
 
