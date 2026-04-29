@@ -25,8 +25,9 @@ Fluxo normal:
 4. Envie `LAUNCH:1.50` ou use o app.
 5. O motor 1 tensiona ate a posicao calibrada.
 6. A engrenagem/trava mecanica segura a carga.
-7. O motor 1 retorna ao zero sem soltar a carga.
-8. O motor 2 libera a engrenagem/trava e completa o disparo.
+7. O firmware aguarda 1 s para a trava assentar.
+8. O motor 1 retorna ao zero sem soltar a carga.
+9. O motor 2 libera a engrenagem/trava e completa o disparo.
 
 ---
 
@@ -140,6 +141,7 @@ Estados:
 |---|---|
 | `IDLE` | Pronto para comando |
 | `TENSIONING` | Motor 1 indo ate a posicao de tensionamento |
+| `LOCK_SETTLING` | Pausa curta para a engrenagem/trava assentar |
 | `RETURNING` | Motor 1 voltando ao zero enquanto a engrenagem segura a carga |
 | `ARMED` | Sistema travado mecanicamente, pronto para o motor 2 liberar |
 | `FIRING` | Motor 2 liberando a engrenagem/trava e retornando ao zero |
@@ -172,6 +174,7 @@ STATUS:IDLE:DIST:1.50m:POS_T:0:POS_D:0
 | Velocidade do tensionamento | `T_VELOCIDADE_MAX` |
 | Aceleracao do tensionamento | `T_ACELERACAO` |
 | Passos do gatilho | `DISPARO_PASSOS` |
+| Pausa entre tensionar e retornar | `LOCK_SETTLE_MS` |
 | Delay apos acionar gatilho | `DISPARO_DELAY_MS` |
 | Tempo maximo armado | `ARMED_TIMEOUT_MS` |
 | Distancia para passos | `lookup_table.h` |

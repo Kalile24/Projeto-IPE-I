@@ -44,12 +44,13 @@
 #define D_ACELERACAO      300.0f
 #define DISPARO_PASSOS    512
 #define DISPARO_DELAY_MS  300
+#define LOCK_SETTLE_MS   1000
 
 #define ARMED_TIMEOUT_MS 30000
 #define LED_LENTO        1000
 #define LED_RAPIDO        200
 
-enum Estado { IDLE, TENSIONING, RETURNING, ARMED, FIRING };
+enum Estado { IDLE, TENSIONING, LOCK_SETTLING, RETURNING, ARMED, FIRING };
 Estado estadoAtual = IDLE;
 
 int stepsRAM[TABLE_SIZE];
@@ -59,6 +60,7 @@ bool autoDisparar = false;
 
 unsigned long tempoDisparo = 0;
 unsigned long tempoEntradaARMED = 0;
+unsigned long tempoTrava = 0;
 unsigned long ultimoBlink = 0;
 bool estadoLED = false;
 bool retornoDisparoIniciado = false;
@@ -85,7 +87,7 @@ void desenergizarMotores() {
 }
 
 const char* nomeEstado() {
-    static const char* nomes[] = {"IDLE", "TENSIONING", "RETURNING", "ARMED", "FIRING"};
+    static const char* nomes[] = {"IDLE", "TENSIONING", "LOCK_SETTLING", "RETURNING", "ARMED", "FIRING"};
     return nomes[estadoAtual];
 }
 
@@ -114,6 +116,10 @@ void atualizarLED() {
                 digitalWrite(PIN_LED, estadoLED);
                 ultimoBlink = agora;
             }
+            break;
+        case LOCK_SETTLING:
+            digitalWrite(PIN_LED, HIGH);
+            estadoLED = true;
             break;
         case RETURNING:
             if (agora - ultimoBlink >= 50) {
@@ -310,8 +316,9 @@ void loop() {
             motorTensao.run();
         } else if (estadoAtual == TENSIONING) {
             enviarStatus("LOCKED");
-            iniciarRetornoTensionamento(true);
-            enviarStatus("RETURNING");
+            tempoTrava = agora;
+            estadoAtual = LOCK_SETTLING;
+            enviarStatus("LOCK_SETTLING:" + String(LOCK_SETTLE_MS) + "ms");
         } else {
             motorTensao.disableOutputs();
             if (armarAposRetorno) {
@@ -330,6 +337,11 @@ void loop() {
                 enviarStatus("IDLE");
             }
         }
+    }
+
+    if (estadoAtual == LOCK_SETTLING && agora - tempoTrava >= LOCK_SETTLE_MS) {
+        iniciarRetornoTensionamento(true);
+        enviarStatus("RETURNING");
     }
 
     if (estadoAtual == FIRING) {

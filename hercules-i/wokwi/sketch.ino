@@ -25,6 +25,7 @@
 #define D_ACELERACAO      300.0f
 #define DISPARO_PASSOS    512
 #define DISPARO_DELAY_MS  300
+#define LOCK_SETTLE_MS   1000
 
 #define ARMED_TIMEOUT_MS 30000
 
@@ -51,7 +52,7 @@ int stepsTabela[TABLE_SIZE] = {
     1485   // 4,00 m
 };
 
-enum Estado { IDLE, TENSIONING, RETURNING, ARMED, FIRING };
+enum Estado { IDLE, TENSIONING, LOCK_SETTLING, RETURNING, ARMED, FIRING };
 Estado estadoAtual = IDLE;
 
 float distanciaAlvo = 1.00f;
@@ -64,6 +65,7 @@ bool estadoLED = false;
 
 unsigned long tempoEntradaARMED = 0;
 unsigned long tempoDisparo = 0;
+unsigned long tempoTrava = 0;
 unsigned long ultimoBlink = 0;
 
 AccelStepper motorTensao(AccelStepper::DRIVER, PIN_T_STEP, PIN_T_DIR);
@@ -71,7 +73,7 @@ AccelStepper motorDisparo(AccelStepper::DRIVER, PIN_D_STEP, PIN_D_DIR);
 String bufferSerial = "";
 
 const char* nomeEstado() {
-    static const char* nomes[] = {"IDLE", "TENSIONING", "RETURNING", "ARMED", "FIRING"};
+    static const char* nomes[] = {"IDLE", "TENSIONING", "LOCK_SETTLING", "RETURNING", "ARMED", "FIRING"};
     return nomes[estadoAtual];
 }
 
@@ -94,6 +96,12 @@ void atualizarLED() {
 
     if (estadoAtual == TENSIONING) intervalo = 100;
     if (estadoAtual == FIRING || estadoAtual == RETURNING) intervalo = 50;
+
+    if (estadoAtual == LOCK_SETTLING) {
+        digitalWrite(PIN_LED, HIGH);
+        estadoLED = true;
+        return;
+    }
 
     if (estadoAtual == ARMED) {
         digitalWrite(PIN_LED, HIGH);
@@ -303,8 +311,9 @@ void loop() {
             motorTensao.run();
         } else if (estadoAtual == TENSIONING) {
             printEstado();
-            Serial.println("[SIM] TRAVADO pela engrenagem. Motor 1 voltando ao zero.");
-            iniciarRetornoTensionamento(true);
+            Serial.printf("[SIM] TRAVADO pela engrenagem. Aguardando %d ms antes do retorno.\n", LOCK_SETTLE_MS);
+            tempoTrava = agora;
+            estadoAtual = LOCK_SETTLING;
         } else {
             motorTensao.disableOutputs();
             if (armarAposRetorno) {
@@ -325,6 +334,11 @@ void loop() {
                 Serial.print("\n> ");
             }
         }
+    }
+
+    if (estadoAtual == LOCK_SETTLING && agora - tempoTrava >= LOCK_SETTLE_MS) {
+        Serial.println("[SIM] Pausa concluida. Motor 1 voltando ao zero.");
+        iniciarRetornoTensionamento(true);
     }
 
     if (estadoAtual == FIRING) {
