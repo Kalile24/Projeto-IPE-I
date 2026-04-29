@@ -144,7 +144,7 @@ Estados:
 | `LOCK_SETTLING` | Pausa curta para a engrenagem/trava assentar |
 | `RETURNING` | Motor 1 voltando ao zero enquanto a engrenagem segura a carga |
 | `ARMED` | Sistema travado mecanicamente, pronto para o motor 2 liberar |
-| `FIRING` | Motor 2 liberando a engrenagem/trava e retornando ao zero |
+| `FIRING` | Motor 2 liberando a engrenagem/trava, aguardando 1 s e retornando ao zero |
 
 Comandos:
 
@@ -175,7 +175,7 @@ STATUS:IDLE:DIST:1.50m:POS_T:0:POS_D:0
 | Aceleracao do tensionamento | `T_ACELERACAO` |
 | Passos do gatilho | `DISPARO_PASSOS` |
 | Pausa entre tensionar e retornar | `LOCK_SETTLE_MS` |
-| Delay apos acionar gatilho | `DISPARO_DELAY_MS` |
+| Pausa entre liberar trava e retorno do motor 2 | `DISPARO_DELAY_MS` |
 | Tempo maximo armado | `ARMED_TIMEOUT_MS` |
 | Distancia para passos | `lookup_table.h` |
 

@@ -24,7 +24,7 @@
 #define D_VELOCIDADE_MAX  700.0f
 #define D_ACELERACAO      300.0f
 #define DISPARO_PASSOS    512
-#define DISPARO_DELAY_MS  300
+#define DISPARO_DELAY_MS 1000
 #define LOCK_SETTLE_MS   1000
 
 #define ARMED_TIMEOUT_MS 30000
@@ -348,7 +348,7 @@ void loop() {
             if (agora - tempoDisparo >= DISPARO_DELAY_MS) {
                 motorDisparo.moveTo(0);
                 retornoDisparoIniciado = true;
-                Serial.println("[SIM] Motor 2 liberou a trava. Voltando ao zero.");
+                Serial.println("[SIM] Motor 2 liberou a trava. Pausa concluida; voltando ao zero.");
             }
         } else {
             motorDisparo.disableOutputs();
