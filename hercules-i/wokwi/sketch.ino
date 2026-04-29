@@ -1,5 +1,5 @@
 /**
- * Hércules I — Simulação Wokwi v1.2.0
+ * Hércules I — Simulação Wokwi v1.3.0
  * Equipe A2 / IPE I / IME 2026.1
  *
  * Espelha o firmware real com as seguintes adaptações para simulação:
@@ -334,7 +334,7 @@ void setup() {
 
     Serial.println("\n====================================================");
     Serial.println("  HERCULES I — SIMULAÇÃO WOKWI v1.2");
-    Serial.println("  2× A4988 + AccelStepper | Equipe A2 / IME 2026.1");
+    Serial.println("  2x A4988 + AccelStepper | Equipe A2 / IME 2026.1");
     Serial.println("====================================================");
     Serial.println("  LAUNCH:X.XX  SET:X.XX  ARM  FIRE  ABORT  HOME  STATUS  TABELA");
     Serial.println("====================================================\n");

@@ -109,7 +109,9 @@ Bibliotecas necessárias (instalar pelo Library Manager):
 
 ## App mobile (MIT App Inventor — Android)
 
-O arquivo `app/HerculesI.aia` é o projeto pronto para importar no MIT App Inventor.
+Comunicação via **Bluetooth Clássico SPP** — sem extensões externas, funciona em qualquer Android.
+
+O arquivo `app/HerculesI.aia` é o projeto pronto para importar.
 
 ### Como instalar
 
@@ -117,25 +119,24 @@ O arquivo `app/HerculesI.aia` é o projeto pronto para importar no MIT App Inven
 2. **Projects → Import project (.aia)** → selecione `app/HerculesI.aia`
 3. **Build → Android App (.apk)** → instale no celular
 
-> Alternativa mais rápida: conecte o celular pelo **MIT AI2 Companion** (Play Store) e clique **Connect → AI Companion** no site — testa sem precisar gerar o APK.
+> Mais rápido para testes: instale **MIT AI2 Companion** (Play Store) e clique **Connect → AI Companion** no site — abre o app na hora sem gerar APK.
 
-### Dependência: extensão BLE
+### Emparelhar o ESP32 antes de usar
 
-O app usa a extensão oficial de Bluetooth LE do MIT. Ela já está referenciada no projeto — ao importar o `.aia`, o App Inventor pode pedir para baixá-la automaticamente. Se não baixar:
-
-1. No App Inventor: **Extensions → Import extension**
-2. URL: `https://mit-cml.github.io/extensions/data/extensions/edu.mit.appinventor.ble.aix`
+1. No Android: Configurações → Bluetooth → Procurar dispositivos
+2. Selecione **Hercules-I** → PIN: **1234**
+3. Abra o app → toque **CONECTAR** → selecione Hercules-I na lista
 
 ### Fluxo de uso
 
 ```
-1. Abra o app → toque CONECTAR → aguarda encontrar "Hercules-I"
+1. CONECTAR → seleciona Hercules-I na lista de dispositivos emparelhados
 2. Ajuste a distância (slider ou botões 0.5 / 1.0 / 2.0 / 3.0 / 4.0 m)
-3. Toque LANÇAR → catapulta tensiona e dispara automaticamente
-4. ABORTAR a qualquer momento devolve ao zero
+3. LANÇAR → catapulta tensiona e dispara automaticamente
+4. ABORTAR a qualquer momento retorna ao zero
 ```
 
-O estado atual (TENSIONING, ARMED, FIRING…) aparece em tempo real na tela. A bateria é atualizada a cada 5 segundos.
+Estado atual (TENSIONING, ARMED, FIRING…) e bateria atualizam a cada 3 segundos.
 
 ---
 

@@ -1,0 +1,22 @@
+{
+  "configurations": [
+    {
+      "name": "ESP32",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "/home/marcos-kalile/Código ESP32/hercules-i/.arduino15/packages/esp32/hardware/esp32/3.3.8/**",
+        "/home/marcos-kalile/Código ESP32/hercules-i/Arduino/libraries/**"
+      ],
+      "defines": [
+        "ARDUINO=10607",
+        "ESP32",
+        "ESP_PLATFORM"
+      ],
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-x64"
+    }
+  ],
+  "version": 4
+}

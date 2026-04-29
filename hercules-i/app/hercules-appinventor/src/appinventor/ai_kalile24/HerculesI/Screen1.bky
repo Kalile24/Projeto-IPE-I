@@ -1,43 +1,28 @@
 <xml xmlns="https://developers.google.com/blockly/xml">
 
-  <!-- ── Variáveis globais ───────────────────────────────────────────── -->
-  <block type="global_declaration" id="var_conectado" x="20" y="20">
+  <!-- ── Variáveis globais ─────────────────────────────────────────── -->
+  <block type="global_declaration" x="20" y="20">
     <field name="NAME">conectado</field>
     <value name="VALUE"><block type="logic_boolean"><field name="BOOL">FALSE</field></block></value>
   </block>
 
-  <block type="global_declaration" id="var_estado" x="20" y="80">
+  <block type="global_declaration" x="20" y="80">
     <field name="NAME">estado</field>
     <value name="VALUE"><block type="text"><field name="TEXT">IDLE</field></block></value>
   </block>
 
-  <!-- índice do slider: 0=0.5m, 1=0.75m, ..., 14=4.0m (passo 0.25m) -->
-  <block type="global_declaration" id="var_indice" x="20" y="140">
+  <!-- índice do slider: 0=0.50m … 14=4.00m, passo 0.25m -->
+  <block type="global_declaration" x="20" y="140">
     <field name="NAME">indice</field>
     <value name="VALUE"><block type="math_number"><field name="NUM">4</field></block></value>
   </block>
 
-  <!-- UUIDs BLE -->
-  <block type="global_declaration" id="var_svc" x="20" y="200">
-    <field name="NAME">UUID_SVC</field>
-    <value name="VALUE"><block type="text"><field name="TEXT">12345678-1234-1234-1234-123456789abc</field></block></value>
-  </block>
-  <block type="global_declaration" id="var_cmd" x="20" y="260">
-    <field name="NAME">UUID_CMD</field>
-    <value name="VALUE"><block type="text"><field name="TEXT">12345678-1234-1234-1234-123456789ab1</field></block></value>
-  </block>
-  <block type="global_declaration" id="var_sta" x="20" y="320">
-    <field name="NAME">UUID_STA</field>
-    <value name="VALUE"><block type="text"><field name="TEXT">12345678-1234-1234-1234-123456789ab2</field></block></value>
-  </block>
-
-  <!-- ── Função: distância em metros a partir do índice do slider ──── -->
-  <block type="procedures_defreturn" id="fn_distancia" x="400" y="20">
+  <!-- ── Função: metros a partir do índice ─────────────────────────── -->
+  <block type="procedures_defreturn" x="400" y="20">
     <mutation><arg name="idx"></arg></mutation>
     <field name="NAME">distanciaM</field>
     <statement name="STACK"></statement>
     <value name="RETURN">
-      <!-- 0.50 + idx * 0.25 -->
       <block type="math_arithmetic">
         <field name="OP">ADD</field>
         <value name="A"><block type="math_number"><field name="NUM">0.5</field></block></value>
@@ -52,25 +37,40 @@
     </value>
   </block>
 
-  <!-- ── Função: envia string via BLE ──────────────────────────────── -->
-  <block type="procedures_defnoreturn" id="fn_enviar" x="400" y="160">
+  <!-- ── Função: envia comando via Bluetooth ───────────────────────── -->
+  <block type="procedures_defnoreturn" x="400" y="140">
     <mutation><arg name="cmd"></arg></mutation>
-    <field name="NAME">enviarBLE</field>
+    <field name="NAME">enviar</field>
     <statement name="STACK">
-      <block type="component_method">
-        <mutation component_type="BluetoothLE" method_name="WriteStringValue" is_generic="false" instance_name="BluetoothLE1"></mutation>
-        <field name="INSTANCE_NAME">BluetoothLE1</field>
-        <value name="ARG0"><block type="variables_get"><field name="VAR">UUID_SVC</field></block></value>
-        <value name="ARG1"><block type="variables_get"><field name="VAR">UUID_CMD</field></block></value>
-        <value name="ARG2"><block type="logic_boolean"><field name="BOOL">FALSE</field></block></value>
-        <value name="ARG3"><block type="variables_get"><field name="VAR">cmd</field></block></value>
+      <block type="controls_if">
+        <value name="IF0">
+          <block type="component_set_get">
+            <mutation component_type="BluetoothClient" set_or_get="get" property_name="IsConnected" is_generic="false" instance_name="BT"></mutation>
+            <field name="INSTANCE_NAME">BT</field>
+            <field name="PROP">IsConnected</field>
+          </block>
+        </value>
+        <statement name="DO0">
+          <block type="component_method">
+            <mutation component_type="BluetoothClient" method_name="SendText" is_generic="false" instance_name="BT"></mutation>
+            <field name="INSTANCE_NAME">BT</field>
+            <value name="ARG0">
+              <block type="text_join">
+                <mutation items="2"></mutation>
+                <value name="ADD0"><block type="variables_get"><field name="VAR">cmd</field></block></value>
+                <value name="ADD1"><block type="text"><field name="TEXT">
+</field></block></value>
+              </block>
+            </value>
+          </block>
+        </statement>
       </block>
     </statement>
   </block>
 
   <!-- ── Função: atualiza label de distância ───────────────────────── -->
-  <block type="procedures_defnoreturn" id="fn_atualiza_label" x="400" y="300">
-    <field name="NAME">atualizarLabelDist</field>
+  <block type="procedures_defnoreturn" x="400" y="300">
+    <field name="NAME">atualizarLabel</field>
     <statement name="STACK">
       <block type="component_set_get">
         <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelDistancia"></mutation>
@@ -92,14 +92,16 @@
     </statement>
   </block>
 
-  <!-- ── Função: atualiza botões conforme estado ───────────────────── -->
-  <block type="procedures_defnoreturn" id="fn_atualiza_ui" x="400" y="420">
+  <!-- ── Função: atualiza botões conforme conexão e estado ─────────── -->
+  <block type="procedures_defnoreturn" x="400" y="420">
     <field name="NAME">atualizarUI</field>
     <statement name="STACK">
-      <block type="controls_if">
-        <mutation else="1"></mutation>
-        <!-- se conectado E estado == IDLE -->
-        <value name="IF0">
+      <!-- LANÇAR: só habilitado se conectado E IDLE -->
+      <block type="component_set_get">
+        <mutation component_type="Button" set_or_get="set" property_name="Enabled" is_generic="false" instance_name="BotaoLancar"></mutation>
+        <field name="INSTANCE_NAME">BotaoLancar</field>
+        <field name="PROP">Enabled</field>
+        <value name="VALUE">
           <block type="logic_operation">
             <field name="OP">AND</field>
             <value name="A"><block type="variables_get"><field name="VAR">conectado</field></block></value>
@@ -112,26 +114,8 @@
             </value>
           </block>
         </value>
-        <statement name="DO0">
-          <!-- habilita LANÇAR -->
-          <block type="component_set_get">
-            <mutation component_type="Button" set_or_get="set" property_name="Enabled" is_generic="false" instance_name="BotaoLancar"></mutation>
-            <field name="INSTANCE_NAME">BotaoLancar</field>
-            <field name="PROP">Enabled</field>
-            <value name="VALUE"><block type="logic_boolean"><field name="BOOL">TRUE</field></block></value>
-          </block>
-        </statement>
-        <statement name="ELSE">
-          <!-- desabilita LANÇAR -->
-          <block type="component_set_get">
-            <mutation component_type="Button" set_or_get="set" property_name="Enabled" is_generic="false" instance_name="BotaoLancar"></mutation>
-            <field name="INSTANCE_NAME">BotaoLancar</field>
-            <field name="PROP">Enabled</field>
-            <value name="VALUE"><block type="logic_boolean"><field name="BOOL">FALSE</field></block></value>
-          </block>
-        </statement>
       </block>
-      <!-- ABORTAR: habilitado sempre que conectado e não IDLE -->
+      <!-- ABORTAR: habilitado se conectado E não IDLE -->
       <block type="component_set_get">
         <mutation component_type="Button" set_or_get="set" property_name="Enabled" is_generic="false" instance_name="BotaoAbortar"></mutation>
         <field name="INSTANCE_NAME">BotaoAbortar</field>
@@ -158,25 +142,155 @@
   </block>
 
   <!-- ── Screen1.Initialize ────────────────────────────────────────── -->
-  <block type="component_event" id="ev_init" x="800" y="20">
+  <block type="component_event" x="900" y="20">
     <mutation component_type="Form" is_generic="false" instance_name="Screen1" event_name="Initialize"></mutation>
     <field name="INSTANCE_NAME">Screen1</field>
     <statement name="DO">
-      <!-- slider começa em 4 (= 1.50 m) -->
-      <block type="component_set_get">
-        <mutation component_type="Slider" set_or_get="set" property_name="ThumbPosition" is_generic="false" instance_name="SliderDistancia"></mutation>
-        <field name="INSTANCE_NAME">SliderDistancia</field>
-        <field name="PROP">ThumbPosition</field>
-        <value name="VALUE"><block type="math_number"><field name="NUM">4</field></block></value>
+      <block type="procedures_callnoreturn">
+        <mutation name="atualizarLabel"></mutation>
       </block>
       <block type="procedures_callnoreturn">
-        <mutation name="atualizarLabelDist"></mutation>
+        <mutation name="atualizarUI"></mutation>
       </block>
     </statement>
   </block>
 
-  <!-- ── Slider: posição alterada ──────────────────────────────────── -->
-  <block type="component_event" id="ev_slider" x="800" y="120">
+  <!-- ── ListPicker: abre lista de dispositivos emparelhados ───────── -->
+  <block type="component_event" x="900" y="120">
+    <mutation component_type="ListPicker" is_generic="false" instance_name="ListPicker1" event_name="BeforePicking"></mutation>
+    <field name="INSTANCE_NAME">ListPicker1</field>
+    <statement name="DO">
+      <block type="component_set_get">
+        <mutation component_type="ListPicker" set_or_get="set" property_name="Elements" is_generic="false" instance_name="ListPicker1"></mutation>
+        <field name="INSTANCE_NAME">ListPicker1</field>
+        <field name="PROP">Elements</field>
+        <value name="VALUE">
+          <block type="component_set_get">
+            <mutation component_type="BluetoothClient" set_or_get="get" property_name="AddressesAndNames" is_generic="false" instance_name="BT"></mutation>
+            <field name="INSTANCE_NAME">BT</field>
+            <field name="PROP">AddressesAndNames</field>
+          </block>
+        </value>
+      </block>
+    </statement>
+  </block>
+
+  <!-- ── ListPicker: conecta ao dispositivo selecionado ────────────── -->
+  <block type="component_event" x="900" y="260">
+    <mutation component_type="ListPicker" is_generic="false" instance_name="ListPicker1" event_name="AfterPicking"></mutation>
+    <field name="INSTANCE_NAME">ListPicker1</field>
+    <statement name="DO">
+      <block type="controls_if">
+        <value name="IF0">
+          <block type="component_method">
+            <mutation component_type="BluetoothClient" method_name="Connect" is_generic="false" instance_name="BT"></mutation>
+            <field name="INSTANCE_NAME">BT</field>
+            <value name="ARG0">
+              <block type="component_set_get">
+                <mutation component_type="ListPicker" set_or_get="get" property_name="Selection" is_generic="false" instance_name="ListPicker1"></mutation>
+                <field name="INSTANCE_NAME">ListPicker1</field>
+                <field name="PROP">Selection</field>
+              </block>
+            </value>
+          </block>
+        </value>
+        <statement name="DO0">
+          <block type="variables_set">
+            <field name="VAR">conectado</field>
+            <value name="VALUE"><block type="logic_boolean"><field name="BOOL">TRUE</field></block></value>
+          </block>
+          <block type="variables_set">
+            <field name="VAR">estado</field>
+            <value name="VALUE"><block type="text"><field name="TEXT">IDLE</field></block></value>
+          </block>
+          <block type="component_set_get">
+            <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelStatus"></mutation>
+            <field name="INSTANCE_NAME">LabelStatus</field><field name="PROP">Text</field>
+            <value name="VALUE"><block type="text"><field name="TEXT">CONECTADO</field></block></value>
+          </block>
+          <block type="component_set_get">
+            <mutation component_type="Label" set_or_get="set" property_name="TextColor" is_generic="false" instance_name="LabelStatus"></mutation>
+            <field name="INSTANCE_NAME">LabelStatus</field><field name="PROP">TextColor</field>
+            <value name="VALUE"><block type="math_number"><field name="NUM">-16711936</field></block></value>
+          </block>
+          <block type="component_set_get">
+            <mutation component_type="Button" set_or_get="set" property_name="Text" is_generic="false" instance_name="BotaoConectar"></mutation>
+            <field name="INSTANCE_NAME">BotaoConectar</field><field name="PROP">Text</field>
+            <value name="VALUE"><block type="text"><field name="TEXT">DESCONECTAR</field></block></value>
+          </block>
+          <!-- Ativa o Clock para polling de STATUS -->
+          <block type="component_set_get">
+            <mutation component_type="Clock" set_or_get="set" property_name="TimerEnabled" is_generic="false" instance_name="Clock1"></mutation>
+            <field name="INSTANCE_NAME">Clock1</field><field name="PROP">TimerEnabled</field>
+            <value name="VALUE"><block type="logic_boolean"><field name="BOOL">TRUE</field></block></value>
+          </block>
+          <block type="procedures_callnoreturn"><mutation name="atualizarUI"></mutation></block>
+        </statement>
+      </block>
+    </statement>
+  </block>
+
+  <!-- ── Botão CONECTAR/DESCONECTAR ────────────────────────────────── -->
+  <block type="component_event" x="900" y="560">
+    <mutation component_type="Button" is_generic="false" instance_name="BotaoConectar" event_name="Click"></mutation>
+    <field name="INSTANCE_NAME">BotaoConectar</field>
+    <statement name="DO">
+      <block type="controls_if">
+        <mutation else="1"></mutation>
+        <value name="IF0"><block type="variables_get"><field name="VAR">conectado</field></block></value>
+        <statement name="DO0">
+          <block type="component_method">
+            <mutation component_type="BluetoothClient" method_name="Disconnect" is_generic="false" instance_name="BT"></mutation>
+            <field name="INSTANCE_NAME">BT</field>
+          </block>
+          <block type="variables_set">
+            <field name="VAR">conectado</field>
+            <value name="VALUE"><block type="logic_boolean"><field name="BOOL">FALSE</field></block></value>
+          </block>
+          <block type="variables_set">
+            <field name="VAR">estado</field>
+            <value name="VALUE"><block type="text"><field name="TEXT">IDLE</field></block></value>
+          </block>
+          <block type="component_set_get">
+            <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelStatus"></mutation>
+            <field name="INSTANCE_NAME">LabelStatus</field><field name="PROP">Text</field>
+            <value name="VALUE"><block type="text"><field name="TEXT">DESCONECTADO</field></block></value>
+          </block>
+          <block type="component_set_get">
+            <mutation component_type="Label" set_or_get="set" property_name="TextColor" is_generic="false" instance_name="LabelStatus"></mutation>
+            <field name="INSTANCE_NAME">LabelStatus</field><field name="PROP">TextColor</field>
+            <value name="VALUE"><block type="math_number"><field name="NUM">-52480</field></block></value>
+          </block>
+          <block type="component_set_get">
+            <mutation component_type="Button" set_or_get="set" property_name="Text" is_generic="false" instance_name="BotaoConectar"></mutation>
+            <field name="INSTANCE_NAME">BotaoConectar</field><field name="PROP">Text</field>
+            <value name="VALUE"><block type="text"><field name="TEXT">CONECTAR</field></block></value>
+          </block>
+          <block type="component_set_get">
+            <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelEstado"></mutation>
+            <field name="INSTANCE_NAME">LabelEstado</field><field name="PROP">Text</field>
+            <value name="VALUE"><block type="text"><field name="TEXT">---</field></block></value>
+          </block>
+          <block type="component_set_get">
+            <mutation component_type="Clock" set_or_get="set" property_name="TimerEnabled" is_generic="false" instance_name="Clock1"></mutation>
+            <field name="INSTANCE_NAME">Clock1</field><field name="PROP">TimerEnabled</field>
+            <value name="VALUE"><block type="logic_boolean"><field name="BOOL">FALSE</field></block></value>
+          </block>
+          <block type="procedures_callnoreturn"><mutation name="atualizarUI"></mutation></block>
+        </statement>
+        <statement name="ELSE">
+          <!-- se não conectado, abre o ListPicker -->
+          <block type="component_method">
+            <mutation component_type="ListPicker" method_name="Open" is_generic="false" instance_name="ListPicker1"></mutation>
+            <field name="INSTANCE_NAME">ListPicker1</field>
+          </block>
+        </statement>
+      </block>
+    </statement>
+  </block>
+
+  <!-- ── Slider ────────────────────────────────────────────────────── -->
+  <block type="component_event" x="900" y="900">
     <mutation component_type="Slider" is_generic="false" instance_name="SliderDistancia" event_name="PositionChanged"></mutation>
     <field name="INSTANCE_NAME">SliderDistancia</field>
     <statement name="DO">
@@ -195,14 +309,12 @@
           </block>
         </value>
       </block>
-      <block type="procedures_callnoreturn">
-        <mutation name="atualizarLabelDist"></mutation>
-      </block>
+      <block type="procedures_callnoreturn"><mutation name="atualizarLabel"></mutation></block>
     </statement>
   </block>
 
   <!-- ── Botões de distância rápida ────────────────────────────────── -->
-  <block type="component_event" id="ev_btn05" x="800" y="240">
+  <block type="component_event" x="1400" y="20">
     <mutation component_type="Button" is_generic="false" instance_name="Btn05" event_name="Click"></mutation>
     <field name="INSTANCE_NAME">Btn05</field>
     <statement name="DO">
@@ -214,11 +326,11 @@
         <field name="INSTANCE_NAME">SliderDistancia</field><field name="PROP">ThumbPosition</field>
         <value name="VALUE"><block type="math_number"><field name="NUM">0</field></block></value>
       </block>
-      <block type="procedures_callnoreturn"><mutation name="atualizarLabelDist"></mutation></block>
+      <block type="procedures_callnoreturn"><mutation name="atualizarLabel"></mutation></block>
     </statement>
   </block>
 
-  <block type="component_event" id="ev_btn10" x="800" y="360">
+  <block type="component_event" x="1400" y="140">
     <mutation component_type="Button" is_generic="false" instance_name="Btn10" event_name="Click"></mutation>
     <field name="INSTANCE_NAME">Btn10</field>
     <statement name="DO">
@@ -230,11 +342,11 @@
         <field name="INSTANCE_NAME">SliderDistancia</field><field name="PROP">ThumbPosition</field>
         <value name="VALUE"><block type="math_number"><field name="NUM">2</field></block></value>
       </block>
-      <block type="procedures_callnoreturn"><mutation name="atualizarLabelDist"></mutation></block>
+      <block type="procedures_callnoreturn"><mutation name="atualizarLabel"></mutation></block>
     </statement>
   </block>
 
-  <block type="component_event" id="ev_btn20" x="800" y="480">
+  <block type="component_event" x="1400" y="260">
     <mutation component_type="Button" is_generic="false" instance_name="Btn20" event_name="Click"></mutation>
     <field name="INSTANCE_NAME">Btn20</field>
     <statement name="DO">
@@ -246,11 +358,11 @@
         <field name="INSTANCE_NAME">SliderDistancia</field><field name="PROP">ThumbPosition</field>
         <value name="VALUE"><block type="math_number"><field name="NUM">6</field></block></value>
       </block>
-      <block type="procedures_callnoreturn"><mutation name="atualizarLabelDist"></mutation></block>
+      <block type="procedures_callnoreturn"><mutation name="atualizarLabel"></mutation></block>
     </statement>
   </block>
 
-  <block type="component_event" id="ev_btn30" x="800" y="600">
+  <block type="component_event" x="1400" y="380">
     <mutation component_type="Button" is_generic="false" instance_name="Btn30" event_name="Click"></mutation>
     <field name="INSTANCE_NAME">Btn30</field>
     <statement name="DO">
@@ -262,11 +374,11 @@
         <field name="INSTANCE_NAME">SliderDistancia</field><field name="PROP">ThumbPosition</field>
         <value name="VALUE"><block type="math_number"><field name="NUM">10</field></block></value>
       </block>
-      <block type="procedures_callnoreturn"><mutation name="atualizarLabelDist"></mutation></block>
+      <block type="procedures_callnoreturn"><mutation name="atualizarLabel"></mutation></block>
     </statement>
   </block>
 
-  <block type="component_event" id="ev_btn40" x="800" y="720">
+  <block type="component_event" x="1400" y="500">
     <mutation component_type="Button" is_generic="false" instance_name="Btn40" event_name="Click"></mutation>
     <field name="INSTANCE_NAME">Btn40</field>
     <statement name="DO">
@@ -278,283 +390,17 @@
         <field name="INSTANCE_NAME">SliderDistancia</field><field name="PROP">ThumbPosition</field>
         <value name="VALUE"><block type="math_number"><field name="NUM">14</field></block></value>
       </block>
-      <block type="procedures_callnoreturn"><mutation name="atualizarLabelDist"></mutation></block>
-    </statement>
-  </block>
-
-  <!-- ── Botão CONECTAR ────────────────────────────────────────────── -->
-  <block type="component_event" id="ev_conectar" x="1300" y="20">
-    <mutation component_type="Button" is_generic="false" instance_name="BotaoConectar" event_name="Click"></mutation>
-    <field name="INSTANCE_NAME">BotaoConectar</field>
-    <statement name="DO">
-      <block type="controls_if">
-        <mutation else="1"></mutation>
-        <value name="IF0"><block type="variables_get"><field name="VAR">conectado</field></block></value>
-        <statement name="DO0">
-          <!-- desconectar -->
-          <block type="component_method">
-            <mutation component_type="BluetoothLE" method_name="Disconnect" is_generic="false" instance_name="BluetoothLE1"></mutation>
-            <field name="INSTANCE_NAME">BluetoothLE1</field>
-          </block>
-        </statement>
-        <statement name="ELSE">
-          <!-- escanear e conectar pelo nome -->
-          <block type="component_method">
-            <mutation component_type="BluetoothLE" method_name="StartScanning" is_generic="false" instance_name="BluetoothLE1"></mutation>
-            <field name="INSTANCE_NAME">BluetoothLE1</field>
-          </block>
-          <block type="component_set_get">
-            <mutation component_type="Button" set_or_get="set" property_name="Text" is_generic="false" instance_name="BotaoConectar"></mutation>
-            <field name="INSTANCE_NAME">BotaoConectar</field>
-            <field name="PROP">Text</field>
-            <value name="VALUE"><block type="text"><field name="TEXT">Procurando...</field></block></value>
-          </block>
-        </statement>
-      </block>
-    </statement>
-  </block>
-
-  <!-- ── BLE: dispositivo encontrado → conecta se for Hercules-I ───── -->
-  <block type="component_event" id="ev_device_found" x="1300" y="180">
-    <mutation component_type="BluetoothLE" is_generic="false" instance_name="BluetoothLE1" event_name="DeviceFound"></mutation>
-    <field name="INSTANCE_NAME">BluetoothLE1</field>
-    <statement name="DO">
-      <block type="controls_if">
-        <value name="IF0">
-          <block type="logic_compare">
-            <field name="OP">EQ</field>
-            <value name="A">
-              <block type="component_set_get">
-                <mutation component_type="BluetoothLE" set_or_get="get" property_name="DeviceName" is_generic="false" instance_name="BluetoothLE1"></mutation>
-                <field name="INSTANCE_NAME">BluetoothLE1</field>
-                <field name="PROP">DeviceName</field>
-              </block>
-            </value>
-            <value name="B"><block type="text"><field name="TEXT">Hercules-I</field></block></value>
-          </block>
-        </value>
-        <statement name="DO0">
-          <block type="component_method">
-            <mutation component_type="BluetoothLE" method_name="StopScanning" is_generic="false" instance_name="BluetoothLE1"></mutation>
-            <field name="INSTANCE_NAME">BluetoothLE1</field>
-          </block>
-          <block type="component_method">
-            <mutation component_type="BluetoothLE" method_name="Connect" is_generic="false" instance_name="BluetoothLE1"></mutation>
-            <field name="INSTANCE_NAME">BluetoothLE1</field>
-            <value name="ARG0">
-              <block type="component_set_get">
-                <mutation component_type="BluetoothLE" set_or_get="get" property_name="DeviceList" is_generic="false" instance_name="BluetoothLE1"></mutation>
-                <field name="INSTANCE_NAME">BluetoothLE1</field>
-                <field name="PROP">DeviceList</field>
-              </block>
-            </value>
-          </block>
-        </statement>
-      </block>
-    </statement>
-  </block>
-
-  <!-- ── BLE: conectado ─────────────────────────────────────────────── -->
-  <block type="component_event" id="ev_connected" x="1300" y="380">
-    <mutation component_type="BluetoothLE" is_generic="false" instance_name="BluetoothLE1" event_name="Connected"></mutation>
-    <field name="INSTANCE_NAME">BluetoothLE1</field>
-    <statement name="DO">
-      <block type="variables_set"><field name="VAR">conectado</field>
-        <value name="VALUE"><block type="logic_boolean"><field name="BOOL">TRUE</field></block></value>
-      </block>
-      <block type="variables_set"><field name="VAR">estado</field>
-        <value name="VALUE"><block type="text"><field name="TEXT">IDLE</field></block></value>
-      </block>
-      <block type="component_set_get">
-        <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelStatus"></mutation>
-        <field name="INSTANCE_NAME">LabelStatus</field><field name="PROP">Text</field>
-        <value name="VALUE"><block type="text"><field name="TEXT">CONECTADO</field></block></value>
-      </block>
-      <block type="component_set_get">
-        <mutation component_type="Label" set_or_get="set" property_name="TextColor" is_generic="false" instance_name="LabelStatus"></mutation>
-        <field name="INSTANCE_NAME">LabelStatus</field><field name="PROP">TextColor</field>
-        <value name="VALUE"><block type="math_number"><field name="NUM">-16711936</field></block></value>
-      </block>
-      <block type="component_set_get">
-        <mutation component_type="Button" set_or_get="set" property_name="Text" is_generic="false" instance_name="BotaoConectar"></mutation>
-        <field name="INSTANCE_NAME">BotaoConectar</field><field name="PROP">Text</field>
-        <value name="VALUE"><block type="text"><field name="TEXT">DESCONECTAR</field></block></value>
-      </block>
-      <!-- Registra para receber notificações de status -->
-      <block type="component_method">
-        <mutation component_type="BluetoothLE" method_name="RegisterForStringValues" is_generic="false" instance_name="BluetoothLE1"></mutation>
-        <field name="INSTANCE_NAME">BluetoothLE1</field>
-        <value name="ARG0"><block type="variables_get"><field name="VAR">UUID_SVC</field></block></value>
-        <value name="ARG1"><block type="variables_get"><field name="VAR">UUID_STA</field></block></value>
-        <value name="ARG2"><block type="logic_boolean"><field name="BOOL">FALSE</field></block></value>
-      </block>
-      <block type="procedures_callnoreturn"><mutation name="atualizarUI"></mutation></block>
-    </statement>
-  </block>
-
-  <!-- ── BLE: desconectado ──────────────────────────────────────────── -->
-  <block type="component_event" id="ev_disconnected" x="1300" y="660">
-    <mutation component_type="BluetoothLE" is_generic="false" instance_name="BluetoothLE1" event_name="Disconnected"></mutation>
-    <field name="INSTANCE_NAME">BluetoothLE1</field>
-    <statement name="DO">
-      <block type="variables_set"><field name="VAR">conectado</field>
-        <value name="VALUE"><block type="logic_boolean"><field name="BOOL">FALSE</field></block></value>
-      </block>
-      <block type="variables_set"><field name="VAR">estado</field>
-        <value name="VALUE"><block type="text"><field name="TEXT">IDLE</field></block></value>
-      </block>
-      <block type="component_set_get">
-        <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelStatus"></mutation>
-        <field name="INSTANCE_NAME">LabelStatus</field><field name="PROP">Text</field>
-        <value name="VALUE"><block type="text"><field name="TEXT">DESCONECTADO</field></block></value>
-      </block>
-      <block type="component_set_get">
-        <mutation component_type="Label" set_or_get="set" property_name="TextColor" is_generic="false" instance_name="LabelStatus"></mutation>
-        <field name="INSTANCE_NAME">LabelStatus</field><field name="PROP">TextColor</field>
-        <value name="VALUE"><block type="math_number"><field name="NUM">-52480</field></block></value>
-      </block>
-      <block type="component_set_get">
-        <mutation component_type="Button" set_or_get="set" property_name="Text" is_generic="false" instance_name="BotaoConectar"></mutation>
-        <field name="INSTANCE_NAME">BotaoConectar</field><field name="PROP">Text</field>
-        <value name="VALUE"><block type="text"><field name="TEXT">CONECTAR</field></block></value>
-      </block>
-      <block type="component_set_get">
-        <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelEstado"></mutation>
-        <field name="INSTANCE_NAME">LabelEstado</field><field name="PROP">Text</field>
-        <value name="VALUE"><block type="text"><field name="TEXT">---</field></block></value>
-      </block>
-      <block type="procedures_callnoreturn"><mutation name="atualizarUI"></mutation></block>
-    </statement>
-  </block>
-
-  <!-- ── BLE: notificação de status recebida ────────────────────────── -->
-  <block type="component_event" id="ev_string_recv" x="1800" y="20">
-    <mutation component_type="BluetoothLE" is_generic="false" instance_name="BluetoothLE1" event_name="StringValuesReceived"></mutation>
-    <field name="INSTANCE_NAME">BluetoothLE1</field>
-    <statement name="DO">
-      <!-- Atualiza label de estado com a mensagem recebida -->
-      <block type="component_set_get">
-        <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelEstado"></mutation>
-        <field name="INSTANCE_NAME">LabelEstado</field><field name="PROP">Text</field>
-        <value name="VALUE">
-          <!-- stringValues é uma lista; pega o primeiro elemento -->
-          <block type="lists_select_item">
-            <value name="LIST">
-              <block type="component_set_get">
-                <mutation component_type="BluetoothLE" set_or_get="get" property_name="StringValues" is_generic="false" instance_name="BluetoothLE1"></mutation>
-                <field name="INSTANCE_NAME">BluetoothLE1</field>
-                <field name="PROP">StringValues</field>
-              </block>
-            </value>
-            <value name="NUM"><block type="math_number"><field name="NUM">1</field></block></value>
-          </block>
-        </value>
-      </block>
-      <!-- Extrai estado da mensagem (primeiro segmento antes de ':') -->
-      <block type="variables_set">
-        <field name="VAR">estado</field>
-        <value name="VALUE">
-          <block type="lists_select_item">
-            <value name="LIST">
-              <block type="text_split">
-                <field name="OP">SPLITATFIRST</field>
-                <value name="TEXT">
-                  <block type="lists_select_item">
-                    <value name="LIST">
-                      <block type="component_set_get">
-                        <mutation component_type="BluetoothLE" set_or_get="get" property_name="StringValues" is_generic="false" instance_name="BluetoothLE1"></mutation>
-                        <field name="INSTANCE_NAME">BluetoothLE1</field>
-                        <field name="PROP">StringValues</field>
-                      </block>
-                    </value>
-                    <value name="NUM"><block type="math_number"><field name="NUM">1</field></block></value>
-                  </block>
-                </value>
-                <value name="AT"><block type="text"><field name="TEXT">:</field></block></value>
-              </block>
-            </value>
-            <value name="NUM"><block type="math_number"><field name="NUM">1</field></block></value>
-          </block>
-        </value>
-      </block>
-      <!-- Atualiza bateria se mensagem contiver BAT -->
-      <block type="controls_if">
-        <value name="IF0">
-          <block type="text_contains">
-            <field name="END">BOTH</field>
-            <value name="TEXT">
-              <block type="lists_select_item">
-                <value name="LIST">
-                  <block type="component_set_get">
-                    <mutation component_type="BluetoothLE" set_or_get="get" property_name="StringValues" is_generic="false" instance_name="BluetoothLE1"></mutation>
-                    <field name="INSTANCE_NAME">BluetoothLE1</field>
-                    <field name="PROP">StringValues</field>
-                  </block>
-                </value>
-                <value name="NUM"><block type="math_number"><field name="NUM">1</field></block></value>
-              </block>
-            </value>
-            <value name="PIECE"><block type="text"><field name="TEXT">BAT:</field></block></value>
-          </block>
-        </value>
-        <statement name="DO0">
-          <block type="component_set_get">
-            <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelBat"></mutation>
-            <field name="INSTANCE_NAME">LabelBat</field><field name="PROP">Text</field>
-            <value name="VALUE">
-              <block type="text_join">
-                <mutation items="2"></mutation>
-                <value name="ADD0"><block type="text"><field name="TEXT">Bateria: </field></block></value>
-                <value name="ADD1">
-                  <block type="lists_select_item">
-                    <value name="LIST">
-                      <block type="text_split">
-                        <field name="OP">SPLITATFIRST</field>
-                        <value name="TEXT">
-                          <block type="lists_select_item">
-                            <value name="LIST">
-                              <block type="text_split">
-                                <field name="OP">SPLITATFIRST</field>
-                                <value name="TEXT">
-                                  <block type="lists_select_item">
-                                    <value name="LIST">
-                                      <block type="component_set_get">
-                                        <mutation component_type="BluetoothLE" set_or_get="get" property_name="StringValues" is_generic="false" instance_name="BluetoothLE1"></mutation>
-                                        <field name="INSTANCE_NAME">BluetoothLE1</field>
-                                        <field name="PROP">StringValues</field>
-                                      </block>
-                                    </value>
-                                    <value name="NUM"><block type="math_number"><field name="NUM">1</field></block></value>
-                                  </block>
-                                </value>
-                                <value name="AT"><block type="text"><field name="TEXT">BAT:</field></block></value>
-                              </block>
-                            </value>
-                            <value name="NUM"><block type="math_number"><field name="NUM">2</field></block></value>
-                          </block>
-                        </value>
-                        <value name="AT"><block type="text"><field name="TEXT">:</field></block></value>
-                      </block>
-                    </value>
-                    <value name="NUM"><block type="math_number"><field name="NUM">1</field></block></value>
-                  </block>
-                </value>
-              </block>
-            </value>
-          </block>
-        </statement>
-      </block>
-      <block type="procedures_callnoreturn"><mutation name="atualizarUI"></mutation></block>
+      <block type="procedures_callnoreturn"><mutation name="atualizarLabel"></mutation></block>
     </statement>
   </block>
 
   <!-- ── Botão LANÇAR ───────────────────────────────────────────────── -->
-  <block type="component_event" id="ev_lancar" x="1800" y="580">
+  <block type="component_event" x="1400" y="640">
     <mutation component_type="Button" is_generic="false" instance_name="BotaoLancar" event_name="Click"></mutation>
     <field name="INSTANCE_NAME">BotaoLancar</field>
     <statement name="DO">
       <block type="procedures_callnoreturn">
-        <mutation name="enviarBLE"><arg name="cmd"></arg></mutation>
+        <mutation name="enviar"><arg name="cmd"></arg></mutation>
         <value name="ARG0">
           <block type="text_join">
             <mutation items="2"></mutation>
@@ -573,20 +419,15 @@
         <field name="INSTANCE_NAME">LabelLog</field><field name="PROP">Text</field>
         <value name="VALUE">
           <block type="text_join">
-            <mutation items="2"></mutation>
+            <mutation items="3"></mutation>
             <value name="ADD0"><block type="text"><field name="TEXT">Lançando </field></block></value>
             <value name="ADD1">
-              <block type="text_join">
-                <mutation items="2"></mutation>
-                <value name="ADD0">
-                  <block type="procedures_callreturn">
-                    <mutation name="distanciaM"><arg name="idx"></arg></mutation>
-                    <value name="ARG0"><block type="variables_get"><field name="VAR">indice</field></block></value>
-                  </block>
-                </value>
-                <value name="ADD1"><block type="text"><field name="TEXT"> m...</field></block></value>
+              <block type="procedures_callreturn">
+                <mutation name="distanciaM"><arg name="idx"></arg></mutation>
+                <value name="ARG0"><block type="variables_get"><field name="VAR">indice</field></block></value>
               </block>
             </value>
+            <value name="ADD2"><block type="text"><field name="TEXT"> m...</field></block></value>
           </block>
         </value>
       </block>
@@ -594,12 +435,12 @@
   </block>
 
   <!-- ── Botão ABORTAR ──────────────────────────────────────────────── -->
-  <block type="component_event" id="ev_abortar" x="1800" y="740">
+  <block type="component_event" x="1400" y="820">
     <mutation component_type="Button" is_generic="false" instance_name="BotaoAbortar" event_name="Click"></mutation>
     <field name="INSTANCE_NAME">BotaoAbortar</field>
     <statement name="DO">
       <block type="procedures_callnoreturn">
-        <mutation name="enviarBLE"><arg name="cmd"></arg></mutation>
+        <mutation name="enviar"><arg name="cmd"></arg></mutation>
         <value name="ARG0"><block type="text"><field name="TEXT">ABORT</field></block></value>
       </block>
       <block type="component_set_get">
@@ -610,18 +451,108 @@
     </statement>
   </block>
 
-  <!-- ── Clock: poll de STATUS a cada 5s ───────────────────────────── -->
-  <block type="component_event" id="ev_clock" x="1800" y="880">
+  <!-- ── Clock: polling de STATUS a cada 3s + leitura de resposta ──── -->
+  <block type="component_event" x="1900" y="20">
     <mutation component_type="Clock" is_generic="false" instance_name="Clock1" event_name="Timer"></mutation>
     <field name="INSTANCE_NAME">Clock1</field>
     <statement name="DO">
       <block type="controls_if">
-        <value name="IF0"><block type="variables_get"><field name="VAR">conectado</field></block></value>
+        <value name="IF0">
+          <block type="component_set_get">
+            <mutation component_type="BluetoothClient" set_or_get="get" property_name="IsConnected" is_generic="false" instance_name="BT"></mutation>
+            <field name="INSTANCE_NAME">BT</field>
+            <field name="PROP">IsConnected</field>
+          </block>
+        </value>
         <statement name="DO0">
+          <!-- Lê todas as linhas disponíveis no buffer -->
+          <block type="controls_while">
+            <value name="BOOL">
+              <block type="math_compare">
+                <field name="OP">GT</field>
+                <value name="A">
+                  <block type="component_set_get">
+                    <mutation component_type="BluetoothClient" set_or_get="get" property_name="BytesAvailableToReceive" is_generic="false" instance_name="BT"></mutation>
+                    <field name="INSTANCE_NAME">BT</field>
+                    <field name="PROP">BytesAvailableToReceive</field>
+                  </block>
+                </value>
+                <value name="B"><block type="math_number"><field name="NUM">0</field></block></value>
+              </block>
+            </value>
+            <statement name="DO">
+              <block type="variables_set">
+                <field name="VAR">estado</field>
+                <value name="VALUE">
+                  <!-- Lê uma linha completa (delimitador '\n' = byte 10) -->
+                  <block type="component_method">
+                    <mutation component_type="BluetoothClient" method_name="ReceiveText" is_generic="false" instance_name="BT"></mutation>
+                    <field name="INSTANCE_NAME">BT</field>
+                    <value name="ARG0">
+                      <block type="component_set_get">
+                        <mutation component_type="BluetoothClient" set_or_get="get" property_name="BytesAvailableToReceive" is_generic="false" instance_name="BT"></mutation>
+                        <field name="INSTANCE_NAME">BT</field>
+                        <field name="PROP">BytesAvailableToReceive</field>
+                      </block>
+                    </value>
+                  </block>
+                </value>
+              </block>
+              <!-- Mostra a mensagem recebida -->
+              <block type="component_set_get">
+                <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelEstado"></mutation>
+                <field name="INSTANCE_NAME">LabelEstado</field><field name="PROP">Text</field>
+                <value name="VALUE"><block type="variables_get"><field name="VAR">estado</field></block></value>
+              </block>
+              <!-- Atualiza bateria se mensagem contiver BAT: -->
+              <block type="controls_if">
+                <value name="IF0">
+                  <block type="text_contains">
+                    <field name="END">BOTH</field>
+                    <value name="TEXT"><block type="variables_get"><field name="VAR">estado</field></block></value>
+                    <value name="PIECE"><block type="text"><field name="TEXT">BAT:</field></block></value>
+                  </block>
+                </value>
+                <statement name="DO0">
+                  <block type="component_set_get">
+                    <mutation component_type="Label" set_or_get="set" property_name="Text" is_generic="false" instance_name="LabelBat"></mutation>
+                    <field name="INSTANCE_NAME">LabelBat</field><field name="PROP">Text</field>
+                    <value name="VALUE">
+                      <block type="text_join">
+                        <mutation items="2"></mutation>
+                        <value name="ADD0"><block type="text"><field name="TEXT">Bateria: </field></block></value>
+                        <value name="ADD1">
+                          <block type="text_segment">
+                            <value name="TEXT"><block type="variables_get"><field name="VAR">estado</field></block></value>
+                            <value name="START">
+                              <block type="math_arithmetic">
+                                <field name="OP">ADD</field>
+                                <value name="A">
+                                  <block type="text_indexOf">
+                                    <field name="END">FIRST</field>
+                                    <value name="VALUE"><block type="variables_get"><field name="VAR">estado</field></block></value>
+                                    <value name="FIND"><block type="text"><field name="TEXT">BAT:</field></block></value>
+                                  </block>
+                                </value>
+                                <value name="B"><block type="math_number"><field name="NUM">4</field></block></value>
+                              </block>
+                            </value>
+                            <value name="LENGTH"><block type="math_number"><field name="NUM">6</field></block></value>
+                          </block>
+                        </value>
+                      </block>
+                    </value>
+                  </block>
+                </statement>
+              </block>
+            </statement>
+          </block>
+          <!-- Envia STATUS para manter o ciclo de telemetria -->
           <block type="procedures_callnoreturn">
-            <mutation name="enviarBLE"><arg name="cmd"></arg></mutation>
+            <mutation name="enviar"><arg name="cmd"></arg></mutation>
             <value name="ARG0"><block type="text"><field name="TEXT">STATUS</field></block></value>
           </block>
+          <block type="procedures_callnoreturn"><mutation name="atualizarUI"></mutation></block>
         </statement>
       </block>
     </statement>
